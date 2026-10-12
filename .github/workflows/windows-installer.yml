@@ -1,0 +1,90 @@
+# Builds JARVIS-Setup-<version>.exe on a Windows runner.
+#
+# Run it by hand (Actions -> windows-installer -> Run workflow), or push a tag
+# like v1.0.0 to also publish the installer as a GitHub Release.
+
+name: windows-installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Installer version (x.y.z)"
+        default: "1.0.0"
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue) -and
+              -not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup -y --no-progress
+          }
+
+      - name: Work out the version
+        id: ver
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_type }}" -eq "tag") { $v = "${{ github.ref_name }}".TrimStart("v") }
+          elseif ("${{ inputs.version }}") { $v = "${{ inputs.version }}" }
+          else { $v = "0.0.0" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Build installer
+        shell: pwsh
+        run: ./windows/build.ps1 -Version "${{ steps.ver.outputs.version }}"
+
+      - name: Smoke-test the install
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem build\out\JARVIS-Setup-*.exe | Select-Object -First 1
+          Start-Process $setup.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=$PWD\smoke" -Wait
+          & "$PWD\smoke\python\python.exe" -c "import fastapi, uvicorn, httpx, websockets, pydantic, playwright; print('imports ok')"
+          # The server itself: start it the way the launcher does and ask it a question.
+          $env:PYTHONUTF8 = "1"
+          $env:JARVIS_DATA_DIR = "$PWD\smoke-data"
+          $env:JARVIS_ENV_FILE = "$PWD\smoke-data\.env"
+          $env:JARVIS_BRAIN_AUTOSTART = "0"
+          $p = Start-Process "$PWD\smoke\python\python.exe" -ArgumentList "$PWD\smoke\app\server.py","--port","8341" `
+               -WorkingDirectory "$PWD\smoke\app" -PassThru -RedirectStandardOutput smoke-out.txt -RedirectStandardError smoke-err.txt
+          $ok = $false
+          for ($i = 0; $i -lt 60 -and -not $ok; $i++) {
+            Start-Sleep -Seconds 1
+            try { $r = Invoke-WebRequest "http://127.0.0.1:8341/" -UseBasicParsing; $ok = ($r.StatusCode -eq 200) } catch {}
+          }
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          if (-not $ok) { Get-Content smoke-out.txt, smoke-err.txt; throw "installed server never answered" }
+          Write-Host "installed server answered 200"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JARVIS-Setup
+          path: build/out/JARVIS-Setup-*.exe
+          if-no-files-found: error
+
+      - name: Publish release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/out/JARVIS-Setup-*.exe
