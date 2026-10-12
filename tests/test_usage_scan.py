@@ -662,7 +662,7 @@ def _unreadable(path: Path) -> None:
     os.chmod(path, 0o000)
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root can read anything")
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root can read anything")
 def test_a_transcript_that_could_not_be_read_is_not_measured(tmp_path):
     a, _ = roots(tmp_path)
     p = write_transcript(a, cwd="/p/one", session_id="s1",
@@ -679,7 +679,7 @@ def test_a_transcript_that_could_not_be_read_is_not_measured(tmp_path):
     assert report.files == 0
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root can read anything")
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root can read anything")
 def test_one_unreadable_file_does_not_unmeasure_the_readable_ones(tmp_path):
     a, _ = roots(tmp_path)
     good = write_transcript(a, cwd="/p/one", session_id="good",

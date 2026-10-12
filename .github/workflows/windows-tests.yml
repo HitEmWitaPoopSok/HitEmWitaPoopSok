@@ -31,4 +31,4 @@ jobs:
       - run: npm run build
         working-directory: frontend
       - name: Test suite
-        run: pytest -v -o faulthandler_timeout=300 -p no:cacheprovider
+        run: pytest -q -rfE -o faulthandler_timeout=300 -p no:cacheprovider
