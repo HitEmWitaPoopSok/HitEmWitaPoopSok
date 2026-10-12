@@ -65,9 +65,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import session_watch
@@ -158,8 +159,14 @@ def _tokens_from(usage) -> Tokens:
 # `fromisoformat` accepts that string happily, so catching only its ValueError
 # left the second call unguarded. Two years of slack at each end covers every
 # UTC offset without needing to know the local one.
-_DAY_MIN = datetime(2, 1, 1).timestamp()
-_DAY_MAX = datetime(9997, 1, 1).timestamp()
+#
+# Timezone-aware, and floored at 1970 on Windows: a naive `.timestamp()` for
+# year 2 raises OSError there, and so does `fromtimestamp` of a negative
+# value, so nothing before the epoch can be named on that platform anyway.
+_DAY_MIN = datetime(2, 1, 1, tzinfo=timezone.utc).timestamp()
+if sys.platform == "win32":
+    _DAY_MIN = 86400.0
+_DAY_MAX = datetime(9997, 1, 1, tzinfo=timezone.utc).timestamp()
 
 
 def _epoch(stamp) -> float | None:
