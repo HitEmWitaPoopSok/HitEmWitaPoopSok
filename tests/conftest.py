@@ -115,3 +115,38 @@ async def _no_run_left_mid_flight():
         task.cancel()
     if pending:
         await asyncio.wait(pending, timeout=5)
+
+
+# --- Windows -----------------------------------------------------------------
+# The suite was written on a Mac. What is skipped here is skipped because the
+# test exercises something that does not exist on Windows (unix-domain
+# sockets, chmod-as-denial, macOS's screencapture/sips/osascript flows —
+# `tests/test_windows_port.py` covers the Windows replacements) or builds a
+# file name Windows forbids. Every skip names its reason; nothing is skipped
+# because it failed for a reason nobody has looked at.
+import sys
+
+_WINDOWS_SKIPS_BY_MODULE = {
+    "test_session_steer": "steering needs unix-domain sockets (AF_UNIX)",
+    "test_screen_sight": "drives the macOS screencapture/sips/osascript flows",
+}
+_WINDOWS_SKIPS_BY_TEST = {
+    "test_a_file_the_repository_named_is_not_spoken_raw": "builds a file name with a newline",
+    "test_a_hostile_filename_cannot_escape_read_files_block": "builds a file name with quotes",
+    "test_a_hostile_filename_cannot_stand_outside_the_block_either": "builds a file name with a newline",
+    "test_a_hostile_project_name_cannot_write_a_tag": "builds a directory name with quotes",
+    "test_a_replaced_file_at_the_same_path_and_size_is_read_from_the_start":
+        "compares byte sizes of a file written in text mode (CRLF)",
+    "test_a_transcript_that_could_not_be_read_is_not_measured": "denies reads with chmod 000",
+    "test_one_unreadable_file_does_not_unmeasure_the_readable_ones": "denies reads with chmod 000",
+}
+
+
+def pytest_collection_modifyitems(config, items):
+    if sys.platform != "win32":
+        return
+    for item in items:
+        reason = (_WINDOWS_SKIPS_BY_MODULE.get(item.module.__name__.split(".")[-1])
+                  or _WINDOWS_SKIPS_BY_TEST.get(item.name))
+        if reason:
+            item.add_marker(pytest.mark.skip(reason=f"Windows: {reason}"))

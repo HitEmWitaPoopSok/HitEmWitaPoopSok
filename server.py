@@ -635,7 +635,8 @@ def _fmt_reset(ts) -> str:
         when = datetime.fromtimestamp(float(ts))
     except (TypeError, ValueError, OSError, OverflowError):
         return "later"
-    clock = when.strftime("%-I:%M %p").replace(":00 ", " ")   # "10:00 AM" -> "10 AM"
+    # No `%-I` / `%-d`: those are glibc/BSD extensions and raise on Windows.
+    clock = f"{when.hour % 12 or 12}:{when:%M %p}".replace(":00 ", " ")   # "10:00 AM" -> "10 AM"
     days = (when.date() - datetime.now().date()).days
     if days <= 0:
         return clock
@@ -643,7 +644,7 @@ def _fmt_reset(ts) -> str:
         return f"tomorrow at {clock}"
     if days < 7:
         return f"{when.strftime('%A')} at {clock}"
-    return f"{when.strftime('%A %-d %B')} at {clock}"
+    return f"{when:%A} {when.day} {when:%B} at {clock}"
 
 
 # True but useless: "down" names neither cause nor remedy. When the brain's
@@ -3869,7 +3870,11 @@ async def tool_steer_session(args: dict) -> str:
 # place" speaks it and a path legitimately holds almost any punctuation. The
 # residual is prose in a header line, for the price of two same-named
 # directories; it is accepted, and it is not parity with the name wall.
-_PLAIN_PATH_RE = _action_re.compile(r"/[^\x00-\x1f\x7f-\x9f<>\"=\u2028\u2029]{0,299}")
+# A path starts at the root: `/` on POSIX, `C:\` or `C:/` on Windows. (With only
+# the first, every project on a Windows machine was "unspeakable", and JARVIS
+# knew of no projects at all.)
+_PLAIN_PATH_RE = _action_re.compile(
+    r"(?:/|[A-Za-z]:[\\/])[^\x00-\x1f\x7f-\x9f<>\"=\u2028\u2029]{0,299}")
 
 
 def _project_name_speakable(name) -> bool:

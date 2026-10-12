@@ -260,3 +260,37 @@ def test_launcher_spawns_hidden_utf8_server(tmp_path):
     argv = popen.call_args.args[0]
     assert argv[1:3] == ["-X", "utf8"] and argv[3].endswith("server.py")
     assert popen.call_args.kwargs["creationflags"] & launcher.CREATE_NO_WINDOW
+
+
+# ── claude command / project paths ─────────────────────────────────────────
+
+def test_a_windows_claude_path_survives_being_split(monkeypatch):
+    import claude_env
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(claude_env.os.path, "isfile", lambda p: False)
+    assert claude_env.command_argv(r"C:\Users\me\AppData\Roaming\npm\claude.cmd") == [
+        r"C:\Users\me\AppData\Roaming\npm\claude.cmd"]
+    assert claude_env.command_argv(r'"C:\Program Files\x\py.exe" C:\t\fake.py') == [
+        r"C:\Program Files\x\py.exe", r"C:\t\fake.py"]
+
+
+def test_an_existing_path_with_spaces_is_one_argument(tmp_path):
+    import claude_env
+    exe = tmp_path / "a dir" / "claude"
+    exe.parent.mkdir()
+    exe.write_text("")
+    assert claude_env.command_argv(str(exe)) == [str(exe)]
+
+
+def test_posix_splitting_is_unchanged():
+    import claude_env
+    assert claude_env.command_argv("python3 /tmp/x y.py") == ["python3", "/tmp/x", "y.py"]
+
+
+def test_windows_project_paths_are_speakable():
+    import server
+    assert server._project_path_speakable(r"C:\Users\me\projects\chitauri")
+    assert server._project_path_speakable("D:/work/chitauri")
+    assert server._project_path_speakable("/home/me/chitauri")
+    assert not server._project_path_speakable("relative/path")
+    assert not server._project_path_speakable('C:\\x"><b')
