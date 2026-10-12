@@ -4,12 +4,10 @@ JARVIS preflight -- first-run environment checks.
 Every one of these has already bitten this project: `claude` missing or too
 old, not logged in (the voice brain runs on the user's *subscription*, never
 an API key -- see brain.py's SCRUBBED_ENV_PREFIXES), `crossSessionInbound`
-not accepting steers into other sessions, `osascript` lacking Accessibility
-so `answer_dialog`'s keystroke fails, and no Fish Audio key at all.
+not accepting steers into other sessions, and no Fish Audio key at all.
 
 This module only *observes*. Nothing here writes a file, changes a setting,
-or grants a permission -- see `_check_cross_session_inbound_sync`'s
-docstring for why that one in particular must stay read-only. It runs at
+or grants a permission. It runs at
 server startup, so the contract is the same one `notifier.py` keeps for its
 own subprocess boundary: **never raise**. A check that itself errors, hangs,
 or can't be parsed becomes a `warn` Check carrying the error text, never an
@@ -19,18 +17,16 @@ Subprocess handling follows notifier.py's pattern (read it first): spawn off
 the event loop, bound by a timeout, kill-and-reap on timeout, decode leniently.
 All process boundaries funnel through `_run_subprocess` below so tests can
 mock the one seam instead of patching `asyncio.create_subprocess_exec`
-per-call (the pattern `dialog.py` uses for `_osascript`).
+per-call.
 """
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import logging
 import os
 import re
 import shutil
-import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -38,7 +34,6 @@ from pathlib import Path
 from typing import Optional
 
 import claude_env
-import screen
 
 log = logging.getLogger("jarvis.preflight")
 
@@ -49,7 +44,7 @@ log = logging.getLogger("jarvis.preflight")
 MIN_CLAUDE_VERSION = (2, 1, 224)
 MIN_CLAUDE_VERSION_STR = "2.1.224"
 
-# A hung subprocess (a wedged `claude`, a modal `osascript` is waiting on)
+# A hung subprocess (a wedged `claude`, a hung PowerShell)
 # must not stall server startup. Each check gets its own budget; they run
 # concurrently in run_checks() so the wall-clock cost is one timeout, not
 # the sum of them.
@@ -91,7 +86,7 @@ async def _run_subprocess(*args: str, timeout: float,
 
     Never raises: a spawn failure or a timeout comes back as returncode -1
     with the problem described in stderr, exactly like notifier.py's
-    `notify()` treats a wedged or missing `osascript`. This is the single
+    `notify()` treats a wedged or missing PowerShell. This is the single
     seam every check in this module spawns a process through, so tests can
     mock it once instead of patching `asyncio.create_subprocess_exec` at
     each call site.
@@ -188,72 +183,29 @@ def _config_dir_from_env(env: dict[str, str]) -> Path:
     return Path(root).expanduser()
 
 
-def _keychain_service_name(config_dir: Path) -> str:
-    """The macOS Keychain service name `claude` stores OAuth credentials
-    under for a given config dir.
-
-    Reverse-engineered empirically against a real install (not documented
-    by the CLI): the default config dir (~/.claude) uses the plain service
-    name "Claude Code-credentials"; any other CLAUDE_CONFIG_DIR gets an
-    8-hex-char suffix that is the start of sha256(str(config_dir)) --
-    verified against a live ~/.claude-orcha install. If a future CLI
-    version changes this scheme, the keychain lookup below simply finds no
-    matching entry, and the caller treats that as "cannot verify" rather
-    than reporting a wrong answer -- this function is a best-effort second
-    signal, never the sole basis for a result.
-    """
-    default = Path("~/.claude").expanduser()
-    if config_dir == default:
-        return "Claude Code-credentials"
-    digest = hashlib.sha256(str(config_dir).encode()).hexdigest()[:8]
-    return f"Claude Code-credentials-{digest}"
-
-
 async def _read_oauth_refresh_expiry(config_dir: Path, timeout: float) -> Optional[float]:
     """Best-effort read of the OAuth refresh token's expiry (unix seconds)
-    from the macOS Keychain, for `config_dir` -- WITHOUT ever surfacing the
-    access or refresh token values themselves, only the expiry timestamp.
+    from Claude Code's credentials file under `config_dir` -- WITHOUT ever
+    surfacing the access or refresh token values themselves, only the expiry
+    timestamp.
 
-    This is what actually distinguishes "logged in" from "logged in but
-    the session cannot be refreshed": `claude auth status` reports only
-    presence, and on a live machine was seen reporting a session as logged
-    in that a real turn then failed to authenticate with. The CLI decides
-    whether a refresh will succeed from this same stored
-    `refreshTokenExpiresAt`, so reading it is the most faithful non-invasive
-    signal available -- short of spending a real turn, which this module
-    must not do.
+    This is what actually distinguishes "logged in" from "logged in but the
+    session cannot be refreshed": `claude auth status` reports only presence,
+    and on a live machine was seen reporting a session as logged in that a
+    real turn then failed to authenticate with. The CLI decides whether a
+    refresh will succeed from this same stored `refreshTokenExpiresAt`, so
+    reading it is the most faithful non-invasive signal available -- short of
+    spending a real turn, which this module must not do.
 
-    Returns None -- "unknown", never "not expired" -- when the probe can't
-    be attempted or trusted: not macOS, `security` missing, no matching
-    keychain entry, or output that doesn't parse the way expected. Callers
-    must not treat None as a clean bill of health.
+    Returns None -- "unknown", never "not expired" -- when the file is
+    missing or does not parse the way expected. Callers must not treat None
+    as a clean bill of health.
     """
-    if sys.platform == "win32":
-        # No Keychain here: Claude Code keeps the OAuth blob in a file under
-        # its config dir. Only the expiry timestamp is ever read out of it.
-        try:
-            data = json.loads((config_dir / ".credentials.json").read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError, ValueError):
-            return None
-        oauth = data.get("claudeAiOauth") if isinstance(data, dict) else None
-        if not isinstance(oauth, dict):
-            return None
-        expires_at_ms = oauth.get("refreshTokenExpiresAt")
-        if not isinstance(expires_at_ms, (int, float)):
-            return None
-        return expires_at_ms / 1000.0
-    if sys.platform != "darwin" or not shutil.which("security"):
-        return None
-    service = _keychain_service_name(config_dir)
-    rc, stdout, _stderr = await _run_subprocess(
-        "security", "find-generic-password", "-s", service, "-w", timeout=timeout)
-    if rc != 0 or not stdout.strip():
-        return None
     try:
-        data = json.loads(stdout)
-    except (json.JSONDecodeError, ValueError):
+        data = json.loads((config_dir / ".credentials.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError):
         return None
-    oauth = data.get("claudeAiOauth")
+    oauth = data.get("claudeAiOauth") if isinstance(data, dict) else None
     if not isinstance(oauth, dict):
         return None
     expires_at_ms = oauth.get("refreshTokenExpiresAt")
@@ -278,7 +230,7 @@ async def _check_claude_login(timeout: float = DEFAULT_CHECK_TIMEOUT) -> Check:
     had `claude auth status` report a session as logged in that then
     failed every turn with "OAuth session expired and could not be
     refreshed". When the account uses OAuth (authMethod "claude.ai"), this
-    also reads the stored refresh token's expiry from the Keychain (see
+    also reads the stored refresh token's expiry from its credentials file (see
     `_read_oauth_refresh_expiry`) and fails the check if it has already
     passed. When that secondary probe can't be attempted or trusted, the
     check stays OK (matching prior behaviour) but says so honestly rather
@@ -349,119 +301,6 @@ async def _check_claude_login(timeout: float = DEFAULT_CHECK_TIMEOUT) -> Check:
     return Check(name="claude_login", status=STATUS_OK, message=message)
 
 
-# macOS's own wording (and error code) for "Accessibility not granted" --
-# distinctive enough it can't match an ordinary AppleScript error. Mirrors
-# dialog.py's _PERMISSION_MARKERS, which sees the sibling "-1743"/"-25211"
-# errors for a different System Events call.
-_ACCESSIBILITY_MARKERS = (
-    "-1728",
-    "not allowed assistive access",
-)
-
-
-async def _check_accessibility(timeout: float = DEFAULT_CHECK_TIMEOUT) -> Check:
-    """Whether osascript has Accessibility (assistive access), without prompting for it.
-
-    `answer_dialog` sends a keystroke via System Events; without this
-    permission the first real keypress fails. Asking System Events for a
-    window list is read-only and, verified live on the dev machine, does
-    NOT trigger a permission dialog when access is missing -- it simply
-    returns AppleScript error -1728. If that ever stops being true on some
-    macOS version, this comes back as a WARN (unrecognised error) rather
-    than mis-reporting OK, so it fails safe.
-    """
-    if sys.platform == "win32":
-        return Check(
-            name="accessibility",
-            status=STATUS_OK,
-            message="Not applicable on Windows: JARVIS sends no keystrokes here.",
-        )
-    if sys.platform != "darwin" or not shutil.which("osascript"):
-        return Check(
-            name="accessibility",
-            status=STATUS_WARN,
-            message="Cannot check Accessibility: not macOS, or osascript is missing.",
-        )
-
-    rc, stdout, stderr = await _run_subprocess(
-        "osascript", "-e",
-        'tell application "System Events" to tell process "Finder" to get name of every window',
-        timeout=timeout,
-    )
-
-    if rc == 0:
-        return Check(name="accessibility", status=STATUS_OK, message="osascript has Accessibility access.")
-
-    combined = f"{stdout}\n{stderr}".lower()
-    if any(marker in combined for marker in _ACCESSIBILITY_MARKERS):
-        return Check(
-            name="accessibility",
-            status=STATUS_FAIL,
-            message="osascript is not granted Accessibility (assistive access); answer_dialog's keystroke will fail.",
-            remedy=(
-                "macOS attributes this to the app that launched JARVIS, not to "
-                "python or osascript. Grant that app under System Settings -> "
-                "Privacy & Security -> Accessibility, or start the server from a "
-                "terminal that already has it. If the app is already ticked and "
-                "this still fails, check whether it is running from "
-                "/private/var/.../AppTranslocation/ (`ps -o comm= -p <its pid>`): "
-                "macOS runs apps opened straight from Downloads at a randomised "
-                "path, and a grant does not follow them there. Move the app to "
-                "/Applications and relaunch it."
-            ),
-        )
-
-    return Check(
-        name="accessibility",
-        status=STATUS_WARN,
-        message=f"Could not determine Accessibility status: {(stderr or stdout).strip()}",
-    )
-
-
-def _check_screen_recording_sync() -> Check:
-    """Whether JARVIS may see the screen at all -- asked, never demonstrated.
-
-    The same lesson as Accessibility one permission along, and worse in one
-    respect: Accessibility fails loudly (AppleScript error -1728), while a
-    `screencapture` without Screen Recording exits 0 and hands back a black
-    or desktop-only frame. `screen.capture_screen` refuses such a frame at
-    the moment of asking; this says it at startup, before the user has spoken.
-
-    It asks CoreGraphics (`CGPreflightScreenCaptureAccess`, the non-prompting
-    one) and NEVER captures anything to find out -- a screenshot the user did
-    not ask for, at every boot, is precisely what this capability must not do.
-    """
-    if sys.platform == "win32":
-        return Check(name="screen_recording", status=STATUS_OK,
-                     message="Not applicable on Windows: no Screen Recording permission exists.")
-    try:
-        granted = screen.screen_recording_granted()
-    except Exception as e:  # the module must never take startup down
-        return Check(name="screen_recording", status=STATUS_WARN,
-                     message=f"Could not determine Screen Recording status: {e}")
-
-    if granted is True:
-        return Check(name="screen_recording", status=STATUS_OK,
-                     message="JARVIS has Screen Recording access.")
-    if granted is None:
-        return Check(
-            name="screen_recording", status=STATUS_WARN,
-            message=("Could not determine Screen Recording status: not macOS, "
-                     "or CoreGraphics could not be asked."))
-    return Check(
-        name="screen_recording",
-        status=STATUS_FAIL,
-        message="JARVIS has not been granted Screen Recording; look_at_screen will refuse.",
-        remedy=(
-            "macOS attributes this to the app that launched JARVIS, not to "
-            "python or screencapture -- the same rule as Accessibility above. "
-            "Grant that app Screen Recording under System Settings -> Privacy "
-            "& Security -> Screen & System Audio Recording, then RESTART it: "
-            "the grant only reaches a process started after it was given."
-        ),
-    )
-
-
 def _check_fish_api_key_sync() -> Check:
     """FISH_API_KEY must be set or JARVIS has no voice."""
     if os.environ.get("FISH_API_KEY"):
@@ -514,79 +353,6 @@ def _settings_path() -> Path:
     """
     root = os.environ.get("CLAUDE_CONFIG_DIR") or "~/.claude"
     return Path(root).expanduser() / "settings.json"
-
-
-def _check_cross_session_inbound_sync() -> Check:
-    """Report -- never change -- what settings.json says about crossSessionInbound.
-
-    Steering a session posts to its inbox socket; if the receiving side is
-    not configured to accept, steers are held for approval or dropped. The
-    fix is `"crossSessionInbound": "accept"` in the user's settings.json,
-    but this function must never write it: the design is that JARVIS offers
-    and the user agrees, never a silent write. This function only reads.
-    """
-    if sys.platform == "win32":
-        return Check(
-            name="cross_session_inbound",
-            status=STATUS_OK,
-            message="Not applicable on Windows: steering into other sessions "
-                    "needs unix-domain inbox sockets, which are not used here.",
-        )
-    path = _settings_path()
-    if not path.exists():
-        return Check(
-            name="cross_session_inbound",
-            status=STATUS_WARN,
-            message=(
-                f"No settings file at {path}; crossSessionInbound is unset, so "
-                "steers into other sessions will be held for approval or dropped."
-            ),
-            remedy=(
-                'Offer to add "crossSessionInbound": "accept" to that settings.json '
-                "-- only if the user agrees."
-            ),
-        )
-
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, ValueError) as e:
-        return Check(
-            name="cross_session_inbound",
-            status=STATUS_WARN,
-            message=f"Could not read/parse {path}: {e}",
-            remedy=f"Check that {path} is valid JSON.",
-        )
-
-    if not isinstance(data, dict):
-        return Check(
-            name="cross_session_inbound",
-            status=STATUS_WARN,
-            message=f"{path} did not contain a JSON object.",
-            remedy=f"Check that {path} is valid JSON.",
-        )
-
-    value = data.get("crossSessionInbound")
-    if value == "accept":
-        return Check(
-            name="cross_session_inbound",
-            status=STATUS_OK,
-            message=f'crossSessionInbound is "accept" in {path}.',
-        )
-
-    if value is None:
-        detail = f"crossSessionInbound is not set in {path}"
-    else:
-        detail = f'crossSessionInbound is {value!r} in {path}, not "accept"'
-
-    return Check(
-        name="cross_session_inbound",
-        status=STATUS_WARN,
-        message=f"{detail}; steers into other sessions will be held for approval or dropped.",
-        remedy=(
-            'Offer to set "crossSessionInbound": "accept" in that settings.json '
-            "-- only if the user agrees; never write it silently."
-        ),
-    )
 
 
 def _read_settings(path: Path) -> dict | None:
@@ -656,9 +422,8 @@ def enable_cross_session_inbound() -> tuple[bool, str]:
 
 # ── running them all ─────────────────────────────────────────────────────
 
-_ASYNC_CHECKS = (_check_claude_cli, _check_claude_login, _check_accessibility)
-_SYNC_CHECKS = (_check_fish_api_key_sync, _check_anthropic_key_leftover_sync,
-                _check_cross_session_inbound_sync, _check_screen_recording_sync)
+_ASYNC_CHECKS = (_check_claude_cli, _check_claude_login)
+_SYNC_CHECKS = (_check_fish_api_key_sync, _check_anthropic_key_leftover_sync)
 
 
 async def _run_one(fn, *, is_async: bool, timeout: float) -> Check:
@@ -715,20 +480,10 @@ def _phrase_for(check: Check) -> str:
         if "not logged in" in msg:
             return "Claude Code isn't logged in"
         return "Claude Code's login couldn't be checked"
-    if name == "accessibility":
-        if "not granted Accessibility" in msg:
-            return "I don't have Accessibility permission"
-        return "Accessibility couldn't be checked"
-    if name == "screen_recording":
-        if "not been granted" in msg:
-            return "I don't have Screen Recording permission"
-        return "Screen Recording couldn't be checked"
     if name == "fish_api_key":
         return "I have no Fish Audio key"
     if name == "anthropic_key_leftover":
         return "there's a leftover Anthropic API key in the environment"
-    if name == "cross_session_inbound":
-        return "cross-session steering isn't enabled"
     return check.message
 
 

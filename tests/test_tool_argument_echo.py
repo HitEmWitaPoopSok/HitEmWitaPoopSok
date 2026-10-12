@@ -787,7 +787,7 @@ def test_every_echo_site_is_walled_when_driven(server, payload):
 
 
 def test_a_file_the_repository_named_is_not_spoken_raw(server, monkeypatch, tmp_path):
-    """The ninth audit: a filename on APFS may hold anything but `/` and
+    """The ninth audit: a filename may hold almost anything but `/` and
     NUL, and `open_in_editor`'s FOUND branch said it raw — twenty lines
     below the miss branch that walls it, and four lines below `read_file`'s
     comment stating this exact threat."""

@@ -271,7 +271,7 @@ def test_nothing_chained_piped_or_substituted_can_be_spelled(command, tmp_path):
     "sudo npm run dev",
     "curl example.com",
     "ssh box",
-    "osascript -e beep",
+    "powershell -c beep",
 ])
 def test_only_things_that_start_a_project_are_allowed(command, tmp_path):
     problem = builds.command_problem(command, str(tmp_path))

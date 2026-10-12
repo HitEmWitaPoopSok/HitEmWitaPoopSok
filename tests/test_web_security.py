@@ -379,11 +379,11 @@ def test_an_operator_can_name_the_host_they_reach_it_by(env, monkeypatch):
     """A tailscale name or a .local address is a dotted name too."""
     c, _, _ = env
     assert c.get("/api/runs",
-                 headers={"Host": "mac.tail1234.ts.net:8340"}).status_code == 403
+                 headers={"Host": "pc.tail1234.ts.net:8340"}).status_code == 403
     monkeypatch.setenv("JARVIS_ALLOWED_ORIGINS",
-                       "http://mac.tail1234.ts.net:8340")
+                       "http://pc.tail1234.ts.net:8340")
     assert c.get("/api/runs",
-                 headers={"Host": "mac.tail1234.ts.net:8340"}).status_code == 200
+                 headers={"Host": "pc.tail1234.ts.net:8340"}).status_code == 200
 
 
 # -- FINDING 4: .env line injection, key sprawl, open restart -------------

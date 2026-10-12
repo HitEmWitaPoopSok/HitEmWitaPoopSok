@@ -102,6 +102,7 @@ def connections_seed_path() -> Path:
 # crash: it silently marks that release's users "edited", and they receive no
 # further improvement.
 KNOWN_TEMPLATE_HASHES = frozenset({
+    "d1f9e8baf851983af72912967ef1fc3ca09412fb2aea2138848321b0be11c1d8",  # Windows-only persona: no answer_dialog keystroke
     "fa669514729ae29315c5b40a29587cc48e0636bf88b2e1e466ad21f3cfa0398a",  # brain home under JARVIS_DATA_DIR
     "05e770673312b589529b570f63ec49167eb901d0363642040bef11411ed5ae43",  # announce what needs you now
     "4238420bdd91569b1c8598a5af81a0f9550cee52a5b166267c2ec9d6f645a9dd",  # remember, recall, project_note

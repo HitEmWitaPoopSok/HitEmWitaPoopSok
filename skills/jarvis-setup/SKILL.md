@@ -75,23 +75,6 @@ happen to be debugging from. `preflight.py`'s `claude_login` check does this
 correctly and names the config directory it checked in its message — read
 that output rather than re-deriving it by hand.
 
-## Accessibility permission is granted to the app that LAUNCHES JARVIS
-
-`dialog.py` sends a keystroke to a Claude Code session's Terminal window via
-System Events, which requires macOS Accessibility (assistive access). macOS
-attributes that permission to **the app that launched the `python` process**
-— almost always Terminal.app — not to `python` or `osascript` themselves.
-So: grant Terminal.app (or whichever app started the server) under System
-Settings → Privacy & Security → Accessibility, not "python." If Terminal.app
-is already ticked and it still fails, check whether it's actually running
-from a randomised `/private/var/.../AppTranslocation/` path (macOS does this
-to apps launched straight from Downloads; `ps -o comm= -p <pid>`) — a grant
-does not follow the app there. Move it to `/Applications` and relaunch.
-
-`preflight.py`'s `accessibility` check detects the failure (AppleScript
-error `-1728` / "not allowed assistive access") without ever triggering the
-permission prompt itself, and its remedy text carries this same guidance.
-
 ## `FISH_API_KEY` is genuinely required — there is no fallback voice
 
 `tts.py` calls the Fish Audio API directly; if the key is missing or empty,

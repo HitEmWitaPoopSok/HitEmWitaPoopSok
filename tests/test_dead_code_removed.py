@@ -199,7 +199,7 @@ def test_tasks_routes_are_gone(api):
 
 
 def test_fix_self_route_is_gone(api):
-    """It shelled osascript to run Claude in the repo outside RunExecutor.
+    """It shelled out to run Claude in the repo outside RunExecutor.
     The `fix_self` WebSocket message is the supported path."""
     c, _store, _fake = api
     assert c.post("/api/fix-self").status_code in (404, 405)
@@ -377,7 +377,7 @@ def test_no_action_tag_is_emitted_or_parsed_any_more():
 
 def test_the_context_refresh_thread_is_gone():
     """It wrote `_ctx_cache` that nothing ever read, and paid for it by running
-    an AppleScript every 30s that enumerated every window of every app, opened
+    a script every 30s that enumerated every window of every app, opened
     Calendar.app on the user's screen, and tripped a Notes error. It belonged
     to the retired system-prompt path; the brain gets its context from tools.
 

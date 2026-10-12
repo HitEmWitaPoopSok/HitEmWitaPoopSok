@@ -269,7 +269,7 @@ async def test_open_in_browser_refuses_jarvis_own_data(wired, monkeypatch):
 # --- the wall is about IDENTITY, not spelling ----------------------------
 #
 # `private_reason` compared two `PosixPath`s for equality. Both sides come
-# out of `os.path.realpath`, and macOS's `realpath` does not case-normalise
+# out of `os.path.realpath`, and `realpath` does not case-normalise
 # on a case-insensitive volume: it resolves the symlinks and hands back
 # whatever spelling it was given. So the OS happily opened the file and the
 # guard, looking at the string, decided it "wasn't under" the private root.
@@ -488,7 +488,7 @@ def test_the_kernel_decides_where_the_spelling_cannot(wired):
 
     A symlinked ancestor names the SAME directory by a path that is not a
     case variant of the real one and does not even have the same number of
-    components — `/var/…` for `/private/var/…` on macOS, a firmlink for
+    components — a junction for
     `/Users`, a bind mount on Linux. Case-folding is blind to all three;
     `st_dev`/`st_ino` is not. Skipped where the machine has no such alias,
     because then there is nothing to prove.

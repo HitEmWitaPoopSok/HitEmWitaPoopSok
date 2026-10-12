@@ -25,7 +25,7 @@ def _wait_for_receipt(received, timeout=2.0):
 def fake_session(tmp_path, monkeypatch):
     """A Unix socket that accepts one line, exactly as a live session does.
 
-    AF_UNIX's sun_path is capped at 104 bytes on macOS. pytest's default
+    AF_UNIX's sun_path is capped at 104 bytes on some platforms. pytest's default
     tmp_path (/private/var/folders/.../pytest-of-<user>/pytest-NNN/<test
     name>0/...) routinely runs 130+ bytes, so binding a socket at a full
     tmp_path-qualified name raises `OSError: AF_UNIX path too long` before
@@ -486,7 +486,7 @@ def socket_factory(tmp_path, monkeypatch):
     """Make as many one-shot inbox sockets as a test needs.
 
     chdir + short relative names: AF_UNIX's sun_path is capped at 104 bytes
-    on macOS and pytest's tmp_path alone routinely exceeds it. Never point
+    on some platforms and pytest's tmp_path alone routinely exceeds it. Never point
     any of this at /tmp/cc-socks — those are the user's live sessions.
     """
     monkeypatch.chdir(tmp_path)

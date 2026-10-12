@@ -1,9 +1,9 @@
 # JARVIS for Windows
 
 Windows port of [ethanplusai/jarvis](https://github.com/ethanplusai/jarvis).
-Same brain, same dashboard, same voice; the macOS plumbing (AppleScript,
-`screencapture`, Notification Center, Terminal.app) is replaced with native
-Windows equivalents.
+Same brain, same dashboard, same voice. It is Windows-only: the original's
+macOS-specific code has been removed, and terminal, browser, notification and
+screenshot handling use `cmd.exe` and PowerShell.
 
 ## Install
 
@@ -27,7 +27,7 @@ Windows equivalents.
 Your data (database, memory notes, `.env`, `jarvis.log`) lives in
 `%APPDATA%\JARVIS` and survives upgrades and uninstalls.
 
-## What differs from macOS
+## What is not available on Windows
 
 | Feature | Windows |
 |---|---|
@@ -36,7 +36,7 @@ Your data (database, memory notes, `.env`, `jarvis.log`) lives in
 | Notifications when no tab is open | Windows balloon/toast via PowerShell |
 | "What's on my screen" / window list | PowerShell + `System.Drawing` (per-monitor, DPI aware) |
 | Open a file in an editor | VS Code (`code`), else the file's default app |
-| Answer a permission prompt in another terminal by keystroke | **Not available** (needs Terminal.app); JARVIS says so |
+| Answer a permission prompt in another terminal by keystroke | **Not available** (no way to name another terminal window); JARVIS says so |
 | Steer a message into another running session | **Not available** (needs unix-domain sockets); JARVIS says so |
 | Read the Chrome tab title/URL | **Not available** |
 

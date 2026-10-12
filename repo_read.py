@@ -105,7 +105,7 @@ LOCKFILES = frozenset({
 SENSITIVE_DIRS = frozenset({
     ".ssh", ".aws", ".gnupg", ".gpg", ".kube", ".docker", ".gcloud", ".azure",
     ".config", ".password-store", ".netrc", ".npm", ".yarn", ".cargo",
-    ".local", ".mozilla", ".keychain", ".keys", "secrets", ".secrets",
+    ".local", ".mozilla", ".keys", "secrets", ".secrets",
     "library", ".authinfo", ".subversion", ".gem", ".m2",
 })
 
@@ -315,16 +315,15 @@ def _under(absolute: Path, root: Path, root_id: tuple | None) -> bool:
     Four tests, cheapest first, and every one of them is needed:
 
     1. The strings match. The ordinary case, and free.
-    2. They match case-insensitively. `realpath` does not case-normalise on
-       macOS, so `DATA/jarvis/mcp.json` and `data/jarvis/mcp.json` are the
-       same file with different spellings. Fail CLOSED: on a case-sensitive
+    2. They match case-insensitively. NTFS is case-insensitive, so
+       `DATA/jarvis/mcp.json` and `data/jarvis/mcp.json` are the same file
+       with different spellings. Fail CLOSED: on a case-sensitive
        volume this refuses a genuinely different `DATA/`, which costs the
        user a directory nobody has and buys the same rule on both.
     3. The kernel says the ancestor at the root's own depth IS the root.
        This is the one that is actually true rather than merely usually
-       true: it catches a spelling neither string test predicted, a macOS
-       firmlink (`/System/Volumes/Data/Users/…` is `/Users/…`), and a bind
-       mount. One `stat`, not one per component — containment is decided
+       true: it catches a spelling neither string test predicted, an 8.3 short
+       name (`PROGRA~1`), a junction, and a mount point. One `stat`, not one per component — containment is decided
        entirely by whether that single directory is the private root.
     4. Failing that, some ancestor is the root by identity at a DIFFERENT
        depth: a symlinked ancestor anywhere above changes the component

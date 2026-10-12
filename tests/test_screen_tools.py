@@ -327,24 +327,9 @@ async def test_a_desk_with_nothing_on_it_says_so(ready):
 async def test_the_window_list_refusal_is_spoken(ready):
     server, fake = ready
     fake.raise_list = real_screen.ScreenError(
-        "I haven't been granted Accessibility")
+        "I couldn't read what's open")
     answer = await asyncio.wait_for(server.tool_what_is_on_screen({}), 5)
-    assert "Accessibility" in answer
-
-
-@pytest.mark.asyncio
-async def test_no_accessibility_offers_the_other_way_of_looking(ready):
-    """Accessibility is a DIFFERENT permission from Screen Recording, and on
-    this dev machine it is the one that is missing: the window list refuses
-    while the picture works perfectly. Saying only "I can't" would leave the
-    user with no route to an answer he can in fact have."""
-    server, fake = ready
-    fake.raise_list = real_screen.ScreenError(
-        "I've not been granted Accessibility, sir, so I can't read your "
-        "window titles")
-    answer = await asyncio.wait_for(server.tool_what_is_on_screen({}), 5)
-    assert "look" in answer.lower()
-    assert fake.captures == 0, "it took the picture without being asked"
+    assert "couldn't read what's open" in answer
 
 
 @pytest.mark.asyncio
@@ -387,7 +372,7 @@ def test_the_brain_is_told_the_screen_is_not_the_session_list():
 
 
 # ── which display ───────────────────────────────────────────────────────────
-# `screencapture -m` is the main display only. On a two-screen desk that made
+# The main display only is the default. On a two-screen desk that made
 # JARVIS look like he had lost sight of the other screen: he could describe
 # windows on it (what_is_on_screen lists every display) but never see it.
 

@@ -1275,8 +1275,8 @@ async def _announce_needs_you(event: dict) -> None:
     except Exception as e:
         log.warning(f"needs-you announcement failed: {e}")
     # The RAW name to the notifier, deliberately. That path renders to a
-    # human in Notification Center and passes the name as argv, never as
-    # AppleScript source — `test_the_session_text_reaches_the_notifier_
+    # human in a Windows notification and passes the name through the
+    # environment, never as script source — `test_the_session_text_reaches_the_notifier_
     # verbatim` is the guarantee — so pre-scrubbing it there would hide the
     # real name from the user without protecting anything. The scrubbing
     # above is for the line JARVIS SAYS, which lands in his own context.
@@ -1284,12 +1284,12 @@ async def _announce_needs_you(event: dict) -> None:
 
 
 async def _notify_needs_you(name: str, line: str) -> None:
-    """The macOS fallback for a needs-you nobody was listening to.
+    """The desktop-notification fallback for a needs-you nobody was listening to.
 
     An URGENT utterance with no transport is kept as unread and re-raised when
     a client connects — which is no use at all to a user who is not in the
-    browser tab. So when there is genuinely no voice client, Notification
-    Centre gets it instead. This fires ONLY when no client is connected: the
+    browser tab. So when there is genuinely no voice client, a Windows
+    notification gets it instead. This fires ONLY when no client is connected: the
     user must never be notified about something he just heard spoken. Batched
     completions and `fresh` sessions never come through here — a notification
     is an interruption and has to earn it.
@@ -2332,9 +2332,9 @@ READ_BACK_TOOLS = {"steer_session", "answer_dialog", "run_command"}
 # A README is written by a stranger exactly as a web page is, so the shortest
 # path to an unattended `claude --dangerously-skip-permissions` never touched
 # the web at all: "what's in that repo?" → `read_file` returns an attacker's
-# README → same turn, origin "user", turn clean → `spawn_run`. Add the
-# AppleScript hole `actions.open_browser` had and the same turn was remote
-# code execution with nothing spoken.
+# README → same turn, origin "user", turn clean → `spawn_run`. Add a hole in
+# `actions.open_browser` and the same turn was remote code execution with
+# nothing spoken.
 #
 # So the rule is now the honest one: EVERY reader taints, and the value is
 # what the user hears in the refusal. Marking happens in `/internal/tool`
@@ -3657,8 +3657,7 @@ async def _perform_dialog(item: _StagedDialog) -> None:
                 f"your own hand.", Priority.NORMAL)
         elif outcome == dialog.NOT_PERMITTED:
             await speech.say(
-                "macOS won't let me send keystrokes, sir — I'd need accessibility "
-                "permission in System Settings.", Priority.NORMAL)
+                "I'm not allowed to send keystrokes there, sir.", Priority.NORMAL)
         elif outcome == dialog.NO_TTY:
             await speech.say(
                 f"{_said_name(item)} has no terminal of its own any more, "
@@ -3716,9 +3715,8 @@ async def tool_answer_dialog(args: dict) -> str:
     Three validations, all synchronous and all refusals rather than guesses:
     the session must resolve to exactly one conversation, that conversation
     must have exactly one controlling terminal, and the key must be inside
-    `dialog`'s closed vocabulary. Whether a Terminal.app tab actually owns
-    that tty is NOT decided here — that needs AppleScript, and it is the
-    staged phase's job.
+    `dialog`'s closed vocabulary. Whether a terminal window can actually be
+    reached is NOT decided here — it is the staged phase's job.
     """
     name = str(args.get("name") or "")
     raw_key = str(args.get("key") or "")
@@ -3730,8 +3728,7 @@ async def tool_answer_dialog(args: dict) -> str:
 
     key = dialog.normalize_key(raw_key)
     if key is None:
-        # Refused before anything is staged, and long before any AppleScript
-        # exists. JARVIS presses keys, he does not type: there is no
+        # Refused before anything is staged, and long before anything is sent. JARVIS presses keys, he does not type: there is no
         # best-effort reading of free text, and asking for one is the answer.
         run_store.record_steer(session.session_id, session.voice_name,
                                session.project, raw_key, "dialog:bad_key")
@@ -4608,8 +4605,8 @@ _DIRECTORY_INDEXES = ("index.html", "index.htm")
 # import so that changing it does not need a restart. No second mechanism,
 # no settings file of its own.
 #
-# `actions.open_browser` speaks AppleScript to exactly two applications, so
-# exactly two names are accepted. A third name is refused out loud rather
+# `actions.open_browser` launches exactly two browsers, so exactly two names
+# are accepted. A third name is refused out loud rather
 # than quietly falling through to Chrome: JARVIS saying "opened that in
 # Safari, sir" while Chrome comes up is the same class of lie as reporting a
 # stalled run as a success.
@@ -4866,7 +4863,7 @@ async def tool_open_in_browser(args: dict) -> str:
 
 
 async def tool_open_in_terminal(args: dict) -> str:
-    """Open Terminal.app in a project directory."""
+    """Open a terminal window in a project directory."""
     reference = str(args.get("project") or "").strip()
     if not reference:
         return "Which project, sir?"
@@ -5420,7 +5417,7 @@ def _repo_refusal(refused: Exception, name: str) -> str:
 
 def _repo_relative(root: Path, resolved: Path) -> str:
     """The path, relative to the project, AS IT IS — for inside a block.
-    A filename on APFS may hold anything but `/` and NUL, so this value is
+    A filename may hold characters that would break a header line, so this value is
     never put in a header line; `_said_path` is for that."""
     try:
         return resolved.relative_to(Path(os.path.realpath(str(root)))).as_posix()
@@ -5781,11 +5778,11 @@ ACTING_TOOLS.update({"read_page", "look_at_page"})
 # to see the screen and process it."
 #
 # The same two-tool split as the web, for the same reason — they cost very
-# different amounts. `what_is_on_screen` is one AppleScript: which app is in
+# different amounts. `what_is_on_screen` is one window-list query: which app is in
 # front and what its windows are called, a few hundred bytes, no pixels at
 # all, and it answers "what am I looking at" outright. `look_at_screen` is a
 # real picture the brain SEES, about 1,200 tokens of context (1280x720 after
-# `sips` shrinks it — see screen.py, where that number is measured).
+# it is shrunk — see screen.py).
 #
 # BOTH are acting tools, and not because they write anything. A screenshot of
 # this user's desk can hold a password, a client's data, a private message. It
@@ -5804,9 +5801,8 @@ import screen                                             # noqa: E402
 
 # The whole call must land well inside `jarvis_mcp.TIMEOUT_SEC` (20s): past
 # that the brain is told the server is unreachable while the work carries on
-# regardless. screencapture (~0.15s measured) + sips twice (~0.1s) has
-# enormous headroom; this is the hard deadline for the case where the window
-# server itself is wedged.
+# regardless. The PowerShell capture takes a second or two, so there is
+# headroom; this is the hard deadline for the case where it wedges.
 SCREEN_DEADLINE_SEC = 12.0
 
 _WINDOWS_WRAP_NAME = "open windows"
@@ -5853,15 +5849,7 @@ async def tool_what_is_on_screen(args: dict) -> str:
     except asyncio.TimeoutError:
         return "That took too long, sir — I've given up on it."
     except Exception as e:
-        said = _screen_refusal(e, "what_is_on_screen")
-        # Accessibility and Screen Recording are DIFFERENT permissions, and on
-        # this dev machine it is Accessibility that is missing: the window list
-        # refuses while the picture works perfectly. Leaving it at "I can't"
-        # would deny the user an answer he can in fact have — but the offer is
-        # a sentence, not a capture. Nothing is taken until he says yes.
-        if "Accessibility" in said:
-            said += " I can take a look at it instead, if you'd like."
-        return said
+        return _screen_refusal(e, "what_is_on_screen")
 
     if not windows:
         return "There are no windows open, sir."

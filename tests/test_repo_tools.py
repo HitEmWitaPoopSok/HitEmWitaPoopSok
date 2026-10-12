@@ -647,7 +647,7 @@ async def test_an_editor_that_will_not_start_is_reported(ready, monkeypatch):
 
 
 def test_vs_code_is_preferred_but_not_required(monkeypatch):
-    """Falls back to the system default, so this works on a Mac that has
+    """Falls back to the system default, so this works on a PC that has
     never had VS Code installed."""
     import actions
     monkeypatch.setattr(actions.shutil, "which", lambda name: None)

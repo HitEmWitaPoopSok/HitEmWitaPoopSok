@@ -12,19 +12,19 @@ def _never_spawn_a_real_brain(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _never_post_a_real_notification(monkeypatch, request):
-    """No test may spam the developer's Notification Centre.
+    """No test may spam the developer's desktop with notifications.
 
     Patched on the `notifier` module object itself rather than on `server`, so
     the `importlib.reload(server_module)` that several test fixtures do cannot
-    hand the real implementation back. test_notifier.py is exempt: it tests
+    hand the real implementation back. test_windows_port.py is exempt: it tests
     notify() itself and mocks the subprocess boundary directly.
     """
-    if request.module.__name__.endswith("test_notifier"):
+    if request.module.__name__.endswith("test_windows_port"):
         return
     import notifier
 
     async def _blocked(*args, **kwargs):
-        raise AssertionError("a test tried to post a real macOS notification; "
+        raise AssertionError("a test tried to post a real desktop notification; "
                              "mock notifier.notify")
 
     monkeypatch.setattr(notifier, "notify", _blocked)
@@ -73,7 +73,7 @@ def _never_write_to_the_live_data_dir(monkeypatch, tmp_path):
 async def _no_run_left_mid_flight():
     """No test may end with a run's driver still starting its child.
 
-    The CI hang, twice, on the macOS runner's Python 3.12 and never on 3.13:
+    The CI hang, twice, on Python 3.12 and never on 3.13:
     a test spawned a run, asserted on the row, and returned in the same
     millisecond — while `RunExecutor._drive` was still inside
     `asyncio.create_subprocess_exec`, before the child existed. The loop's
@@ -98,7 +98,7 @@ async def _no_run_left_mid_flight():
 
     # First, the exact place: asyncio's own pipe-connection task, which
     # exists only between fork and "the child is up". Whoever spawned it
-    # (a run driver, the brain, a fake `osascript`) is parked on it. Let it
+    # (a run driver, the brain, a fake process) is parked on it. Let it
     # finish — milliseconds — and yield once so the spawner moves on.
     connecting = _alive("BaseSubprocessTransport._connect_pipes")
     if connecting:
@@ -118,11 +118,9 @@ async def _no_run_left_mid_flight():
 
 
 # --- Windows -----------------------------------------------------------------
-# The suite was written on a Mac. What is skipped here is skipped because the
-# test exercises something that does not exist on Windows (unix-domain
-# sockets, chmod-as-denial, macOS's screencapture/sips/osascript flows —
-# `tests/test_windows_port.py` covers the Windows replacements) or builds a
-# file name Windows forbids. Every skip names its reason; nothing is skipped
+# What is skipped here is skipped because the test exercises something that
+# does not exist on Windows (unix-domain sockets, POSIX file modes, shell-script
+# fakes) or builds a file name Windows forbids. Every skip names its reason; nothing is skipped
 # because it failed for a reason nobody has looked at.
 import sys
 
@@ -149,8 +147,6 @@ if sys.platform == "win32":
 
 _WINDOWS_SKIPS_BY_MODULE = {
     "test_session_steer": "steering needs unix-domain sockets (AF_UNIX)",
-    "test_screen_sight": "drives the macOS screencapture/sips/osascript flows",
-    "test_notifier": "asserts the osascript argv; the PowerShell path is in test_windows_port",
 }
 _WINDOWS_SKIPS_BY_TEST = {
     "test_the_repository_name_is_an_argument_and_never_a_shell_string": "fake `gh` is a shell script",
@@ -163,13 +159,6 @@ _WINDOWS_SKIPS_BY_TEST = {
     "test_a_terminal_opens_in_the_project": "asserts POSIX cd quoting (cmd quoting: test_windows_port)",
     "test_open_in_terminal_calls_actions": "asserts POSIX cd quoting (cmd quoting: test_windows_port)",
     "test_open_in_browser_calls_actions_with_a_file_uri": "POSIX-style fake path has no file URI on Windows",
-    "test_screen_recording_not_granted_is_fail_with_the_launching_app_remedy": "macOS permission",
-    "test_screen_recording_undeterminable_is_warn_not_fail": "macOS permission",
-    "test_screen_recording_check_never_raises": "macOS permission",
-    "test_cross_session_inbound_missing_settings_file": "check is not applicable on Windows",
-    "test_cross_session_inbound_malformed_json": "check is not applicable on Windows",
-    "test_cross_session_inbound_absent_key": "check is not applicable on Windows",
-    "test_cross_session_inbound_set_to_something_else": "check is not applicable on Windows",
     "test_a_file_the_repository_named_is_not_spoken_raw": "builds a file name with a newline",
     "test_a_hostile_filename_cannot_escape_read_files_block": "builds a file name with quotes",
     "test_a_hostile_filename_cannot_stand_outside_the_block_either": "builds a file name with a newline",

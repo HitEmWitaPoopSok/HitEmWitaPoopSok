@@ -186,7 +186,7 @@ def test_a_spawn_is_refused_in_the_turn_that_read_the_file(call):
 
 
 def test_opening_a_browser_is_refused_in_the_turn_that_read_the_file(call):
-    """With the AppleScript hole this was remote code execution with nothing
+    """With that hole this was remote code execution with nothing
     spoken. It is closed twice over now; this is the second lock."""
     _call, _brain, _server, _project = call
     _call("search_repo", project="chitauri", query="needle")

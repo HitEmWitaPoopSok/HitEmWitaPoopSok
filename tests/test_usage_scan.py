@@ -658,7 +658,7 @@ def test_a_non_numeric_token_count_is_zero_not_a_crash(tmp_path, garbage):
 
 def _unreadable(path: Path) -> None:
     """A transcript this process cannot open — the shape of a machine
-    without Full Disk Access, which is the normal first-run state on macOS."""
+    without read permission."""
     os.chmod(path, 0o000)
 
 

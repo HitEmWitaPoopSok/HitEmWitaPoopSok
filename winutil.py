@@ -1,8 +1,7 @@
 """Windows helpers: running a fixed PowerShell script safely.
 
 JARVIS drives the parts of the desktop it needs (notifications, screenshots,
-the window list) through PowerShell on Windows, the way it drives `osascript`
-on macOS, and with the same rule: the script is a constant, and anything
+the window list) through PowerShell, with one rule: the script is a constant, and anything
 attacker-influenced (a session title, a transcript line) reaches it only as
 an environment variable, never as script source.
 """

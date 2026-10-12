@@ -73,7 +73,7 @@ async def test_a_warning_is_logged_but_not_spoken(monkeypatch):
 async def test_a_broken_check_never_costs_the_user_their_server(monkeypatch):
     """This runs inside lifespan. It must not be able to stop startup."""
     async def boom(**k):
-        raise RuntimeError("keychain on fire")
+        raise RuntimeError("a check on fire")
 
     monkeypatch.setattr(preflight, "run_checks", boom)
     monkeypatch.setattr(server, "speech", _Speech())

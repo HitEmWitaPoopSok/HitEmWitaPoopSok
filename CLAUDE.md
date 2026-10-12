@@ -1,12 +1,12 @@
 # JARVIS — Voice AI Assistant
 
 ## Overview
-JARVIS (Just A Rather Very Intelligent System) is a voice-first AI assistant for macOS, with a Windows port (see `windows/` and `winutil.py`). It runs locally on your machine, driving Claude Code for development tasks — every execution recorded as a *run* and watchable at `/dashboard`.
+JARVIS (Just A Rather Very Intelligent System) is a voice-first AI assistant for Windows (a port of ethanplusai/jarvis; see `windows/` and `winutil.py`). It runs locally on your machine, driving Claude Code for development tasks — every execution recorded as a *run* and watchable at `/dashboard`.
 
 ## Quick Start
 Read `skills/jarvis-setup/SKILL.md` first — it carries setup and debugging
 facts (mic-in-Chrome-only, the per-port permission trap, subscription vs. API
-key, what an expired login sounds like, Accessibility) that were only learned
+key, what an expired login sounds like) that were only learned
 by hitting them live, and this walkthrough assumes them.
 
 When a user clones this repo and starts Claude Code, help them:
@@ -43,7 +43,7 @@ this presents as "the UI is up but nothing works" rather than as an error.
 - **AI**: a long-lived Claude Code process (`brain.py`, Sonnet by default) on
   the user's subscription; no Anthropic API calls on the voice path
 - **TTS**: Fish Audio with JARVIS voice model
-- **System**: AppleScript for Terminal and Chrome integration
+- **System**: PowerShell and `cmd.exe` for terminal, Chrome, notification and screenshot integration (`winutil.py`)
 - **Runs**: every Claude Code execution goes through one recorded pipeline —
   `run_store.py` (SQLite) + `run_executor.py`, surfaced at `/api/runs`,
   `/ws/runs`, and the `/dashboard` UI
@@ -106,25 +106,25 @@ arbitrary LLM and file content, so everything goes through
 - `session_watch.py` — Watches every Claude Code session on the machine
   (process / conversation / project)
 - `session_steer.py` — Sends a message into a running session's inbox socket
-- `dialog.py` — Answers a permission prompt in a Terminal window by sending
-  it a keystroke (needs Accessibility)
-- `notifier.py` — macOS notification fallback when no browser tab is
+- `dialog.py` — The closed key vocabulary of `answer_dialog`; on Windows
+  nothing can be pressed in another terminal, so it always answers `no_tty`
+- `notifier.py` — Windows notification fallback when no browser tab is
   connected to speak through
 - `jarvis_memory.py` — Long-term memory: a folder of plain Markdown files the
   user can read and edit directly, not a database
 - `usage_store.py` — Tracks the subscription's five-hour / seven-day
   rate-limit usage (there is no spend to report — see brain.py)
 - `preflight.py` — First-run environment checks: `claude` CLI/login,
-  Accessibility, Fish key, cross-session steering
+  Fish key, leftover API keys
 - `claude_env.py` — The environment every spawned Claude Code child gets,
   including the `ANTHROPIC_*` scrub
-- `actions.py` — System actions (Terminal, Chrome) via AppleScript
+- `actions.py` — System actions (console window, Chrome/Firefox, editor)
 - `browser.py` — Playwright. Only the headless half is live (`read_page`,
   `capture_page`, behind `read_page` / `look_at_page`); the headful
   `JarvisBrowser` search/research class is reachable from nothing but
   `tests/test_browser_integration.py`
-- `screen.py` — Seeing the Mac itself: the window list (`osascript`) and one
-  downscaled `screencapture` the brain sees as an MCP image block. Captured
+- `screen.py` — Seeing the desktop itself: the window list and one
+  downscaled screenshot (both PowerShell) the brain sees as an MCP image block. Captured
   only on a turn the user drove, never persisted, never on a timer
 - `repo_read.py` — Cheap, model-free reading of a repository (no `claude`
   subprocess)
@@ -199,8 +199,8 @@ the file) because it drives `browser.py`, which launches Chromium with
 `headless=False` on purpose and runs live searches. Run those with
 `pytest -m browser`; they skip themselves if there is no network.
 
-Everything else uses fakes at the subprocess seam — `screencapture`, `sips`,
-`osascript` and `claude` are never really invoked. If you add a test that
+Everything else uses fakes at the subprocess seam —
+PowerShell and `claude` are never really invoked. If you add a test that
 needs the network, a real window, or a real `claude`, mark it.
 
 ## Conventions
@@ -210,7 +210,7 @@ needs the network, a real window, or a real `claude`, mark it.
   `/internal/tool`), not by parsing `[ACTION:X]` tags out of its reply — that
   tag machinery is gone in full, including the last handler (`_execute_browse`),
   which lost its caller with the voice dispatch chain
-- AppleScript for Terminal and Chrome control (no OAuth needed)
+- PowerShell / `cmd.exe` for terminal and Chrome control (no OAuth needed)
 - SQLite for runs, run events and usage (`run_store.py`, `usage_store.py`);
   long-term memory is plain Markdown files instead (`jarvis_memory.py`) —
   the user edits it directly, so it is never a database

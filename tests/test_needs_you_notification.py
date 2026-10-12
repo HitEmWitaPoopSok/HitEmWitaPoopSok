@@ -1,8 +1,8 @@
-"""The macOS fallback for a needs-you nobody was listening to.
+"""The desktop-notification fallback for a needs-you nobody was listening to.
 
 An URGENT utterance with no transport is kept as unread and re-raised when a
 client connects — which is no use at all to a user who is not in the browser
-tab. So when there is genuinely no voice client, Notification Centre gets it
+tab. So when there is genuinely no voice client, a Windows notification gets it
 instead. Only then: the user must never be notified about something he just
 heard spoken, and neither a batched completion nor a `fresh` session earns an
 interruption.
@@ -100,7 +100,7 @@ async def test_a_failing_notifier_does_not_break_the_announcement(wired, monkeyp
     import notifier
 
     async def explode(*a, **k):
-        raise RuntimeError("osascript is on fire")
+        raise RuntimeError("powershell is on fire")
 
     monkeypatch.setattr(notifier, "available", lambda: True)
     monkeypatch.setattr(notifier, "notify", explode)
@@ -120,7 +120,7 @@ async def test_a_notification_failure_never_reaches_the_watcher(wired, monkeypat
     import notifier
 
     async def explode(*a, **k):
-        raise RuntimeError("osascript is on fire")
+        raise RuntimeError("powershell is on fire")
 
     monkeypatch.setattr(notifier, "available", lambda: True)
     monkeypatch.setattr(notifier, "notify", explode)
@@ -176,7 +176,7 @@ async def test_a_fresh_session_never_notifies(wired, monkeypatch):
 async def test_the_session_text_reaches_the_notifier_verbatim(wired, monkeypatch):
     """A session name comes out of somebody else's transcript. It is handed to
     notifier.notify() as an argument, so it arrives unescaped and unspliced —
-    notifier.py passes it as argv, never as AppleScript source, and this path
+    notifier.py passes it in the environment, never as script source, and this path
     must not undo that by pre-formatting it into a command."""
     server = wired
     monkeypatch.setattr(server, "speech", FakeSpeech())

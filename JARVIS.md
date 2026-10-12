@@ -98,12 +98,12 @@ is a small, well-isolated file to replace — see *Make it yours* below.
   those checkboxes, not by guessing.
 - **Watches every Claude Code session on the machine** — not just his own. Ask
   "which of my sessions are waiting on me?" and he checks live. He can post a
-  message into one, and answer a permission prompt for one running in
-  Terminal.app by pressing a single key.
+  message into one. (Answering a permission prompt in another terminal by
+  keystroke is not possible on Windows.)
 - **Interrupts you when it matters.** A session that needs a human gets said
   out loud immediately; a session that merely finished gets batched into one
   sentence at the next pause. If nobody has the browser tab open, it becomes a
-  macOS notification instead.
+  Windows notification instead.
 - **Remembers.** Long-term memory is a folder of plain Markdown files, one
   fact per file, with an index the brain always sees. You can read and edit it
   in any text editor.
@@ -138,8 +138,9 @@ stuck is the CLI's own words, not a guess. Fictional sample data.*
 
 ## Requirements
 
-- **macOS.** Terminal control, window listing, screenshots and notifications
-  all go through AppleScript. There is no Linux or Windows path today.
+- **Windows 10 or 11.** Terminal control, window listing, screenshots and
+  notifications go through `cmd.exe` and PowerShell. (This is the Windows port
+  of ethanplusai/jarvis; see `windows/README.md`.)
 - **Google Chrome.** Not a preference — a constraint. The microphone uses the
   Web Speech API (`SpeechRecognition` / `webkitSpeechRecognition`, see
   `frontend/src/voice.ts`), which Firefox has never implemented. There is no
@@ -262,7 +263,7 @@ See `skills/jarvis-setup/SKILL.md` for the longer walkthrough — including what
 to do when a server does not start.
 
 Earlier versions of JARVIS came wired to Apple Calendar, Mail and Notes
-instead. Those are gone: they cost three AppleScript permission prompts on
+instead. Those are gone: they cost three permission prompts on
 first launch, before you had heard him say anything, for an assistant whose job
 is building software. A door you choose is worth more than three we picked.
 
@@ -318,7 +319,7 @@ invariants hold throughout it:
 | Communication | WebSocket — JSON messages, base64 MP3 audio |
 | Brain | One long-lived `claude -p` process, Sonnet by default, on your subscription |
 | Voice | Fish Audio, one request per sentence |
-| System | AppleScript — Terminal, Chrome, notifications, screenshots |
+| System | PowerShell and cmd.exe — terminal, Chrome, notifications, screenshots |
 | Storage | SQLite for runs and usage; plain Markdown for memory |
 
 ### Key files
@@ -338,10 +339,10 @@ invariants hold throughout it:
 | `stream_parser.py` | Pure parsing of Claude Code's stream-json output (no I/O) |
 | `session_watch.py` | Watches every Claude Code session on the machine |
 | `session_steer.py` | Posts a message into a running session's inbox socket |
-| `dialog.py` | Presses one key in the Terminal tab that owns a session |
+| `dialog.py` | The closed key vocabulary for `answer_dialog` (nothing is pressed on Windows) |
 | `jarvis_memory.py` | Memory as a folder of Markdown files, not a database |
 | `jarvis_home/CLAUDE.md` | JARVIS's persona and rules — the file to edit to change who he is |
-| `preflight.py` | First-run checks: CLI version, login, Accessibility, Fish key |
+| `preflight.py` | First-run checks: CLI version, login, Fish key |
 | `data_paths.py` | The single source of truth for where JARVIS writes |
 | `frontend/src/voice.ts` | Web Speech API, audio playback |
 | `frontend/src/orb.ts` | The Three.js particle orb |
@@ -428,7 +429,7 @@ it and bend it to what you do. The seams are deliberately obvious:
 - **The orb** is `frontend/src/orb.ts`, self-contained Three.js.
 
 Contributions are welcome, and the most useful ones are the ones this cannot
-do yet: non-macOS system integration, alternative TTS engines, and a mobile
+do yet: Linux system integration, alternative TTS engines, and a mobile
 client. Please open an issue before a large PR.
 
 ## Development

@@ -274,7 +274,7 @@ def scan_file(path: Path, cache: Cache) -> tuple[FileTotals, int, bool]:
     unconsumed so the next call sees it whole.
 
     THE THIRD VALUE IS THE HONESTY ONE. A file that could not be stat'd or
-    opened — no Full Disk Access, the normal first-run state on macOS —
+    opened —
     contributes nothing, and saying so is the difference between "you have
     used nothing" and "I could not look". `report` counts these, not the
     files it merely walked past.

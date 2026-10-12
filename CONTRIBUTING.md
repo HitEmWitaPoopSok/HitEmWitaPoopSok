@@ -15,7 +15,7 @@ Thanks for your interest in contributing! Here's how to get involved.
 
 - **Bug fixes** — if something's broken, fix it
 - **New integrations** — Spotify, Slack, Notion, etc.
-- **Windows/Linux support** — the AppleScript integrations are macOS-only, cross-platform alternatives welcome
+- **Linux support** — the desktop integrations (terminal, notifications, screenshots) are Windows-only, cross-platform alternatives welcome
 - **Better error handling** — things fail silently in places
 - **Voice improvements** — alternative TTS providers, better speech recognition
 - **New actions** — extend what JARVIS can do

@@ -44,10 +44,10 @@ and watches it:
   got" is answered by reading those boxes, not by guessing.
 - **He watches every Claude Code session on the machine** — not only his own.
   Ask which are waiting on you and he checks live. He can post into one, and
-  answer a permission prompt for one running in Terminal.
+  answer a permission prompt for one running in a terminal (not on Windows).
 - **He interrupts when it matters.** A session blocked on a human is said out
   loud immediately; one that merely finished is batched into a sentence at the
-  next pause. With no browser tab open it becomes a macOS notification.
+  next pause. With no browser tab open it becomes a Windows notification.
 
 ## There is a dashboard now
 
@@ -72,7 +72,7 @@ at launch. The grant is an allowlist computed from your file, never
 
 ## Security became a design constraint
 
-Public added AppleScript escaping and a permissions toggle — real fixes to a
+Public added input escaping and a permissions toggle — real fixes to a
 codebase that started without them. Here it is load-bearing from the floor up:
 
 - Acting tools are gated **in the server**, not in the prompt, so a hostile

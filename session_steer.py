@@ -36,7 +36,7 @@ def post_to_session(socket_path: str | None, prompt: str,
 
     lines = []
     # What is actually known about this token, recorded so nobody "fixes" it
-    # into something it cannot be: it is optional on macOS (the target may
+    # into something it cannot be: it is optional (the target may
     # require none at all); we can only ever send OUR OWN — there is no way
     # to look up another process's; tokens observably differ between
     # sessions (3 distinct values seen across 7 live sessions on one

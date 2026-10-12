@@ -1,10 +1,9 @@
-"""The Windows paths, exercised from any platform.
+"""The Windows code paths, exercised from any platform.
 
-`sys.platform` is flipped to "win32" and every process boundary is faked, so
-these run on the Linux box as well as on a Windows runner. What they pin is
-the *shape* of each Windows branch: which program is spawned, that untrusted
-text travels in the environment and never in script source, and that the
-modules that cannot work on Windows refuse rather than guess.
+Every process boundary is faked, so these run on a Linux dev box as well as on
+a Windows runner. What they pin is the *shape* of each path: which program is
+spawned, and that untrusted text travels in the environment and never in
+script source.
 """
 import asyncio
 import base64
@@ -84,11 +83,6 @@ async def test_open_browser_runs_the_exe_with_the_url_as_one_argument(windows):
     assert popen.call_args.args[0] == [r"C:\chrome.exe", "https://example.com/a b"]
 
 
-@pytest.mark.asyncio
-async def test_chrome_tab_info_is_empty_on_windows(windows):
-    assert await actions.get_chrome_tab_info() == {}
-
-
 # ── notifier ───────────────────────────────────────────────────────────────
 
 class _Proc:
@@ -117,6 +111,52 @@ async def test_windows_notification_keeps_text_out_of_the_script(windows):
     assert seen["env"]["JARVIS_NOTIFY_TITLE"] == evil
     assert seen["env"]["JARVIS_NOTIFY_MESSAGE"] == "body"
     assert "-EncodedCommand" in seen["args"]
+
+
+@pytest.mark.asyncio
+async def test_notify_reports_success_and_failure():
+    for code, expected in ((0, True), (1, False)):
+        proc = _Proc()
+        proc.returncode = code
+
+        async def fake(*args, **kwargs):
+            return proc
+
+        with patch("notifier.available", return_value=True), \
+             patch("notifier.asyncio.create_subprocess_exec", side_effect=fake):
+            assert await notifier.notify("t", "m") is expected
+
+
+@pytest.mark.asyncio
+async def test_notify_is_false_without_powershell():
+    with patch("notifier.available", return_value=False):
+        assert await notifier.notify("t", "m") is False
+
+
+@pytest.mark.asyncio
+async def test_notify_bounds_what_it_passes_on():
+    seen = {}
+
+    async def fake(*args, **kwargs):
+        seen.update(kwargs["env"])
+        return _Proc()
+
+    with patch("notifier.available", return_value=True), \
+         patch("notifier.asyncio.create_subprocess_exec", side_effect=fake):
+        await notifier.notify("T" * 500, "M" * 5000, subtitle="S" * 500)
+    assert len(seen["JARVIS_NOTIFY_TITLE"]) <= notifier._TITLE_MAX
+    assert len(seen["JARVIS_NOTIFY_MESSAGE"]) <= notifier._MESSAGE_MAX
+    assert seen["JARVIS_NOTIFY_MESSAGE"].endswith("…")
+
+
+@pytest.mark.asyncio
+async def test_notify_never_raises():
+    async def boom(*a, **k):
+        raise OSError("no powershell")
+
+    with patch("notifier.available", return_value=True), \
+         patch("notifier.asyncio.create_subprocess_exec", side_effect=boom):
+        assert await notifier.notify("t", "m") is False
 
 
 # ── screen ─────────────────────────────────────────────────────────────────
@@ -173,24 +213,6 @@ async def test_windows_capture_failure_is_spoken(windows):
 # ── dialog / preflight ─────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_dialog_presses_nothing_on_windows(windows):
-    with patch("dialog.find_terminal_tab") as find:
-        assert await dialog.answer(1234, "return") == dialog.NO_TTY
-    find.assert_not_called()
-
-
-def test_tty_lookup_is_none_on_windows(windows):
-    assert dialog.tty_for_pid(1234) is None
-
-
-@pytest.mark.asyncio
-async def test_macos_only_preflight_checks_pass_on_windows(windows):
-    assert (await preflight._check_accessibility()).status == preflight.STATUS_OK
-    assert preflight._check_screen_recording_sync().status == preflight.STATUS_OK
-    assert preflight._check_cross_session_inbound_sync().status == preflight.STATUS_OK
-
-
-@pytest.mark.asyncio
 async def test_oauth_expiry_is_read_from_the_credentials_file(windows, tmp_path):
     (tmp_path / ".credentials.json").write_text(
         '{"claudeAiOauth": {"refreshTokenExpiresAt": 2000000, "accessToken": "secret"}}')
@@ -211,14 +233,6 @@ def test_tool_token_is_created_and_then_reused_on_windows(windows, tmp_path, mon
 
 
 # ── steering ───────────────────────────────────────────────────────────────
-
-def test_steering_is_not_live_without_unix_sockets(monkeypatch, tmp_path):
-    import session_steer
-    sock = tmp_path / "x.sock"
-    sock.write_text("")
-    monkeypatch.delattr(session_steer.socket, "AF_UNIX", raising=False)
-    assert session_steer.post_to_session(str(sock), "hello") == session_steer.NOT_LIVE
-
 
 # ── winutil / launcher ─────────────────────────────────────────────────────
 
