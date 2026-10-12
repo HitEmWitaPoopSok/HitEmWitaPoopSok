@@ -60,12 +60,18 @@ jobs:
         shell: pwsh
         run: |
           $setup = Get-ChildItem build\out\JARVIS-Setup-*.exe | Select-Object -First 1
-          Start-Process $setup.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=$PWD\smoke" -Wait
+          Start-Process $setup.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=$PWD\smoke","/fishkey=test_key_123","/username=Tester" -Wait
+          $envFile = Join-Path $env:APPDATA "JARVIS\.env"
+          if (-not (Test-Path $envFile)) { throw "installer did not write $envFile" }
+          $envText = Get-Content $envFile -Raw
+          if ($envText -notmatch "(?m)^FISH_API_KEY=test_key_123\s*$") { throw "FISH_API_KEY not saved:`n$envText" }
+          if ($envText -notmatch "(?m)^USER_NAME=Tester\s*$") { throw "USER_NAME not saved:`n$envText" }
+          Write-Host "installer saved the Fish key and name"
           & "$PWD\smoke\python\python.exe" -c "import fastapi, uvicorn, httpx, websockets, pydantic, playwright; print('imports ok')"
           # The server itself: start it the way the launcher does and ask it a question.
           $env:PYTHONUTF8 = "1"
           $env:JARVIS_DATA_DIR = "$PWD\smoke-data"
-          $env:JARVIS_ENV_FILE = "$PWD\smoke-data\.env"
+          $env:JARVIS_ENV_FILE = $envFile
           $env:JARVIS_BRAIN_AUTOSTART = "0"
           $p = Start-Process "$PWD\smoke\python\python.exe" -ArgumentList "$PWD\smoke\app\server.py","--port","8341" `
                -WorkingDirectory "$PWD\smoke\app" -PassThru -RedirectStandardOutput smoke-out.txt -RedirectStandardError smoke-err.txt
@@ -74,7 +80,12 @@ jobs:
             Start-Sleep -Seconds 1
             try { $r = Invoke-WebRequest "http://127.0.0.1:8341/" -UseBasicParsing; $ok = ($r.StatusCode -eq 200) } catch {}
           }
+          $fishSaved = $false
+          if ($ok) {
+            try { $fishSaved = (Invoke-RestMethod "http://127.0.0.1:8341/api/settings/status" -UseBasicParsing).env_keys_set.fish_audio } catch {}
+          }
           Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          if ($ok -and -not $fishSaved) { throw "the server does not see the Fish key the installer saved" }
           if (-not $ok) { Get-Content smoke-out.txt, smoke-err.txt; throw "installed server never answered" }
           Write-Host "installed server answered 200"
 

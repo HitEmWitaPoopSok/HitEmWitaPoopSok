@@ -19,8 +19,11 @@ screenshot handling use `cmd.exe` and PowerShell.
      [Git for Windows](https://git-scm.com/download/win)). JARVIS thinks on your
      Claude *subscription*; no API key is used.
    - **Google Chrome** — the microphone only works there.
-   - A **Fish Audio API key** (<https://fish.audio>) for his voice. Put it in
-     `%APPDATA%\JARVIS\.env` as `FISH_API_KEY=...` (or in his settings page).
+   - A **Fish Audio API key** (<https://fish.audio>) for his voice. The
+     installer has a page that asks for it (and your name) and saves it to
+     `%APPDATA%\JARVIS\.env`; leave it blank and JARVIS's settings panel opens
+     and asks for it the first time you start him. For unattended installs:
+     `JARVIS-Setup-1.0.0.exe /VERYSILENT /fishkey=YOUR_KEY /username=Name`.
 4. Start **JARVIS** from the Start menu. He opens `http://localhost:8340` in
    Chrome. **Stop JARVIS** (also in the Start menu) shuts the server down.
 
