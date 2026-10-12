@@ -308,3 +308,12 @@ def test_windows_project_paths_are_speakable():
     assert server._project_path_speakable("/home/me/chitauri")
     assert not server._project_path_speakable("relative/path")
     assert not server._project_path_speakable('C:\\x"><b')
+
+
+def test_a_written_template_is_byte_identical_to_the_text(tmp_path):
+    """On Windows a text-mode write turns "\\n" into "\\r\\n", which made an
+    unedited persona hash differently from the template and never update."""
+    target = tmp_path / "CLAUDE.md"
+    text = "# JARVIS\n\nline two\n"
+    assert data_paths._write_atomically(target, text)
+    assert target.read_bytes() == text.encode("utf-8")

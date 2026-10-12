@@ -167,7 +167,11 @@ def _write_atomically(path: Path, text: str) -> bool:
     try:
         fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}-")
         try:
-            with os.fdopen(fd, "w") as fh:
+            # newline="": write the text exactly as it is. In text mode Windows
+            # turns every "\n" into "\r\n", the file's bytes then no longer
+            # hash to the template's, and an UNEDITED persona looks edited and
+            # is never updated again.
+            with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
                 fh.write(text)
             os.replace(tmp, path)
         except BaseException:
@@ -228,7 +232,7 @@ def _sync_template(template: Path, target: Path, seed: Path,
     key = str(target)
 
     try:
-        shipped = template.read_text()
+        shipped = template.read_text(encoding="utf-8")
     except OSError as e:                                # pragma: no cover
         log.warning(f"data_paths: cannot read the {what} template ({e})")
         return "kept"

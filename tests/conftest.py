@@ -145,10 +145,33 @@ if sys.platform == "win32":
 
     _os.kill = _safe_kill
 
+# Tests that point "the home directory" somewhere by setting HOME. Windows'
+# expanduser/Path.home read USERPROFILE and ignore HOME, so the redirect
+# silently did nothing and the tests scanned the runner's real profile.
+if sys.platform == "win32":
+    import ntpath as _ntpath
+    from pathlib import Path as _Path
+
+    _real_expanduser = _ntpath.expanduser
+
+    def _expanduser(path):
+        path = _os.fspath(path)
+        home = _os.environ.get("HOME")
+        if home and path[:1] == "~" and (len(path) == 1 or path[1] in "/\\"):
+            return home + path[1:]
+        return _real_expanduser(path)
+
+    _ntpath.expanduser = _expanduser
+    _Path.home = classmethod(lambda cls: cls(_os.environ.get("HOME") or _real_expanduser("~")))
+
 _WINDOWS_SKIPS_BY_MODULE = {
     "test_session_steer": "steering needs unix-domain sockets (AF_UNIX)",
 }
 _WINDOWS_SKIPS_BY_TEST = {
+    "test_review_document_defaults_to_the_newest_document": "two files written back to back get the same mtime at Windows' ~15 ms clock tick",
+    "test_a_run_still_gets_the_ordinary_environment": "asserts HOME, which Windows does not have",
+    "test_voice_failing_notice_arrives_in_order": "timing-sensitive; Windows' clock ticks every ~15 ms",
+    "test_a_failed_synthesis_does_not_break_the_chain": "timing-sensitive; Windows' clock ticks every ~15 ms",
     "test_the_repository_name_is_an_argument_and_never_a_shell_string": "fake `gh` is a shell script",
     "test_a_search_query_can_never_be_read_as_a_flag": "fake `gh` is a shell script",
     "test_the_token_file_is_not_world_readable": "POSIX file modes",
