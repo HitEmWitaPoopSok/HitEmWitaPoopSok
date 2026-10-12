@@ -7,6 +7,7 @@ so it ran to completion on the event loop thread and `/api/specs` and
 as the walk took. On a cloud-synced Desktop that was over ten minutes.
 """
 
+import os
 import asyncio
 import sys
 import time
@@ -120,7 +121,7 @@ def test_a_complete_scan_is_served_from_cache(monkeypatch, tmp_path):
 
 def test_roots_are_overridable(monkeypatch, tmp_path):
     """A user whose Desktop is slow or cloud-backed needs an escape hatch."""
-    monkeypatch.setenv("JARVIS_PROJECT_ROOTS", f"{tmp_path}:{tmp_path / 'nope'}")
+    monkeypatch.setenv("JARVIS_PROJECT_ROOTS", os.pathsep.join([str(tmp_path), str(tmp_path / "nope")]))
     assert server._scan_roots() == [tmp_path, tmp_path / "nope"]
 
     monkeypatch.delenv("JARVIS_PROJECT_ROOTS", raising=False)

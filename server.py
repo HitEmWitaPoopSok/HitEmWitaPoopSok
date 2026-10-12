@@ -234,7 +234,7 @@ SCAN_CACHE_SECONDS = float(os.getenv("JARVIS_SCAN_CACHE", "300"))
 def _scan_roots() -> list[Path]:
     override = os.getenv("JARVIS_PROJECT_ROOTS", "").strip()
     if override:
-        return [Path(r).expanduser() for r in override.split(":") if r.strip()]
+        return [Path(r).expanduser() for r in override.split(os.pathsep) if r.strip()]
     return [DESKTOP_PATH, project_maker.projects_root()]
 
 

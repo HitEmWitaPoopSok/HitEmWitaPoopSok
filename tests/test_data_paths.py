@@ -101,7 +101,7 @@ def test_an_unedited_older_persona_is_brought_up_to_date(monkeypatch, tmp_path):
     dp = _fresh(monkeypatch, tmp_path)
     dp.sync_persona()
     old = "# JARVIS\n\nAn older shipped persona.\n"
-    dp.persona_path().write_text(old)
+    dp.persona_path().write_bytes(old.encode("utf-8"))
     dp.persona_seed_path().write_text(json.dumps({"sha256": _sha(old)}))
 
     assert dp.sync_persona() == "updated"
@@ -115,7 +115,7 @@ def test_an_edited_persona_is_never_overwritten_and_names_both_files(
     dp = _fresh(monkeypatch, tmp_path)
     dp.sync_persona()
     mine = _template_text() + "\n\nAlways call me Captain.\n"
-    dp.persona_path().write_text(mine)
+    dp.persona_path().write_bytes(mine.encode("utf-8"))
 
     with caplog.at_level("WARNING"):
         assert dp.sync_persona() == "kept"
@@ -156,7 +156,7 @@ def test_first_run_updates_a_persona_it_can_prove_is_a_shipped_template(
     dp = _fresh(monkeypatch, tmp_path)
     old = "# JARVIS\n\nThe persona as it shipped in some earlier release.\n"
     dp.brain_home().mkdir(parents=True, exist_ok=True)
-    dp.persona_path().write_text(old)
+    dp.persona_path().write_bytes(old.encode("utf-8"))
     monkeypatch.setattr(dp, "KNOWN_TEMPLATE_HASHES", frozenset({_sha(old)}))
 
     assert dp.sync_persona() == "updated"
@@ -171,7 +171,7 @@ def test_first_run_keeps_a_persona_it_cannot_recognise(monkeypatch, tmp_path):
     dp = _fresh(monkeypatch, tmp_path)
     mine = "# JARVIS\n\nRules I wrote myself before the upgrade.\n"
     dp.brain_home().mkdir(parents=True, exist_ok=True)
-    dp.persona_path().write_text(mine)
+    dp.persona_path().write_bytes(mine.encode("utf-8"))
 
     assert dp.sync_persona() == "kept"
     assert dp.persona_path().read_text() == mine
@@ -183,7 +183,7 @@ def test_an_unreadable_record_is_treated_as_no_record(monkeypatch, tmp_path):
     dp = _fresh(monkeypatch, tmp_path)
     dp.sync_persona()
     mine = "# JARVIS\n\nMy own rules.\n"
-    dp.persona_path().write_text(mine)
+    dp.persona_path().write_bytes(mine.encode("utf-8"))
     dp.persona_seed_path().write_text("{not json at all")
 
     assert dp.sync_persona() == "kept"
@@ -196,7 +196,7 @@ def test_ensure_brain_home_runs_the_sync(monkeypatch, tmp_path):
     dp = _fresh(monkeypatch, tmp_path)
     dp.sync_persona()
     old = "# JARVIS\n\nolder\n"
-    dp.persona_path().write_text(old)
+    dp.persona_path().write_bytes(old.encode("utf-8"))
     dp.persona_seed_path().write_text(json.dumps({"sha256": _sha(old)}))
     dp.ensure_brain_home()
     assert dp.persona_path().read_text() == _template_text()
