@@ -1,0 +1,9 @@
+# Checked out with LF everywhere, on every platform. The tests hash and size
+# files byte for byte (the persona template's hash, transcript sizes), and
+# Windows' default autocrlf turned every one of them into a different file.
+* text=auto eol=lf
+*.png binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.exe binary

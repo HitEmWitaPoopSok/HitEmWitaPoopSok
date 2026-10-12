@@ -31,4 +31,12 @@ jobs:
       - run: npm run build
         working-directory: frontend
       - name: Test suite
-        run: pytest -q -rfE -o faulthandler_timeout=300 -p no:cacheprovider
+        run: |
+          pytest -q --tb=short -rfE -o faulthandler_timeout=300 -p no:cacheprovider 2>&1 | Tee-Object -FilePath pytest.log
+          exit $LASTEXITCODE
+      - name: Failure summary
+        if: always()
+        shell: pwsh
+        run: |
+          Select-String -Path pytest.log -Pattern '^(FAILED|ERROR) ' | ForEach-Object { $_.Line.Substring(0, [Math]::Min(170, $_.Line.Length)) }
+          Select-String -Path pytest.log -Pattern ' passed| failed' | Select-Object -Last 1 | ForEach-Object { $_.Line }

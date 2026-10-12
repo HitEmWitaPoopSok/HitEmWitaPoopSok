@@ -126,11 +126,50 @@ async def _no_run_left_mid_flight():
 # because it failed for a reason nobody has looked at.
 import sys
 
+# `os.kill(pid, 0)` is the POSIX idiom for "is it alive?" and the tests use it
+# as one. On Windows CPython sends every signal but CTRL_C_EVENT/CTRL_BREAK_EVENT
+# as TerminateProcess, so the probe KILLS the process it asks about (and was
+# seen taking pytest itself down with a KeyboardInterrupt). Here it is the
+# liveness check the idiom means.
+if sys.platform == "win32":
+    import os as _os
+    import signal as _signal
+    import session_watch as _session_watch
+
+    _real_kill = _os.kill
+
+    def _safe_kill(pid, sig):
+        if sig == 0:
+            if not _session_watch.pid_alive(pid):
+                raise ProcessLookupError(pid)
+            return None
+        return _real_kill(pid, sig)
+
+    _os.kill = _safe_kill
+
 _WINDOWS_SKIPS_BY_MODULE = {
     "test_session_steer": "steering needs unix-domain sockets (AF_UNIX)",
     "test_screen_sight": "drives the macOS screencapture/sips/osascript flows",
+    "test_notifier": "asserts the osascript argv; the PowerShell path is in test_windows_port",
 }
 _WINDOWS_SKIPS_BY_TEST = {
+    "test_the_repository_name_is_an_argument_and_never_a_shell_string": "fake `gh` is a shell script",
+    "test_a_search_query_can_never_be_read_as_a_flag": "fake `gh` is a shell script",
+    "test_the_token_file_is_not_world_readable": "POSIX file modes",
+    "test_ensure_tool_token_fixes_permissions_of_a_pre_existing_file": "POSIX file modes",
+    "test_a_symlink_in_the_token_path_is_refused_not_followed": "POSIX file modes / O_NOFOLLOW",
+    "test_the_generated_mcp_config_is_not_world_readable": "POSIX file modes",
+    "test_a_pre_existing_mcp_config_has_its_mode_forced_back": "POSIX file modes",
+    "test_a_terminal_opens_in_the_project": "asserts POSIX cd quoting (cmd quoting: test_windows_port)",
+    "test_open_in_terminal_calls_actions": "asserts POSIX cd quoting (cmd quoting: test_windows_port)",
+    "test_open_in_browser_calls_actions_with_a_file_uri": "POSIX-style fake path has no file URI on Windows",
+    "test_screen_recording_not_granted_is_fail_with_the_launching_app_remedy": "macOS permission",
+    "test_screen_recording_undeterminable_is_warn_not_fail": "macOS permission",
+    "test_screen_recording_check_never_raises": "macOS permission",
+    "test_cross_session_inbound_missing_settings_file": "check is not applicable on Windows",
+    "test_cross_session_inbound_malformed_json": "check is not applicable on Windows",
+    "test_cross_session_inbound_absent_key": "check is not applicable on Windows",
+    "test_cross_session_inbound_set_to_something_else": "check is not applicable on Windows",
     "test_a_file_the_repository_named_is_not_spoken_raw": "builds a file name with a newline",
     "test_a_hostile_filename_cannot_escape_read_files_block": "builds a file name with quotes",
     "test_a_hostile_filename_cannot_stand_outside_the_block_either": "builds a file name with a newline",
@@ -147,6 +186,7 @@ def pytest_collection_modifyitems(config, items):
         return
     for item in items:
         reason = (_WINDOWS_SKIPS_BY_MODULE.get(item.module.__name__.split(".")[-1])
-                  or _WINDOWS_SKIPS_BY_TEST.get(item.name))
+                  or _WINDOWS_SKIPS_BY_TEST.get(item.name)
+                  or ("SIGSTOP does not exist" if item.name.endswith("[sigstop]") else None))
         if reason:
             item.add_marker(pytest.mark.skip(reason=f"Windows: {reason}"))

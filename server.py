@@ -5423,7 +5423,7 @@ def _repo_relative(root: Path, resolved: Path) -> str:
     A filename on APFS may hold anything but `/` and NUL, so this value is
     never put in a header line; `_said_path` is for that."""
     try:
-        return str(resolved.relative_to(Path(os.path.realpath(str(root)))))
+        return resolved.relative_to(Path(os.path.realpath(str(root)))).as_posix()
     except ValueError:                       # cannot happen after containment
         return resolved.name
 
