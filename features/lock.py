@@ -45,6 +45,12 @@ def status() -> dict:
 def gate(tool: str):
     if tool not in SENSITIVE or not enabled() or unlocked():
         return None
+    try:
+        import companion
+        if companion.remote_active:
+            return None                  # a paired phone has already proved who it is
+    except ImportError:
+        pass
     return ("locked — that needs your say-so on my display, sir. Press Unlock, "
             "then ask me again.")
 

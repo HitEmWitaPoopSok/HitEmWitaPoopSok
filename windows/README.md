@@ -140,3 +140,23 @@ and logged.
 - **Webcam presence or gestures.** It needs camera access and machine-learning models, and the privacy cost isn't worth it.
 - **Approving things from your phone.** ntfy can't reach back into your PC without exposing it to the internet.
 - **A fully offline brain.** JARVIS's brain is Claude Code; swapping in a local model is a separate project.
+
+## The Android companion
+
+The Android app lives in its own repository, **Jarvis-for-android**. From your phone, anywhere:
+
+- ask JARVIS things by voice or text;
+- **search your PC's folders and download a file** (an SVG or PNG you forgot, a LightBurn file), or tell JARVIS "find the logo SVG and send it to me" and it appears in the app's Files tab;
+- **relay a message** to whoever is near the PC: the PC chimes, speaks it aloud, and (if you ask) carries the first thing someone says back to your phone;
+- see his status and press Unlock.
+
+It does **not** listen silently to the room, and a phone request can't run commands, open terminals or browsers, start builds or drive other apps.
+
+### One-time setup
+1. Install **Tailscale** (free) on the PC and on the phone and sign in to the same account. This is the private link between them; nothing is opened to the internet.
+2. In JARVIS's HUD, press **Pair a phone**. It turns the phone link on and shows a code and an address (`100.x.x.x:8341`).
+3. In the app, enter that address and code. The code works once, for five minutes.
+4. Optional: put your ntfy topic in settings so alerts and "file ready" reach the phone while the app is closed.
+5. To have JARVIS available when you're out, tick **Start JARVIS quietly when I sign in** in the installer (or run the installer again). The PC must be on and not asleep. Windows Firewall may ask once to allow `python.exe`; allow it on private networks.
+
+Say "also look in D:\Laser" to add folders to what he searches (never whole drives, your user folder, or system/credential folders). Only common document, image, vector, laser and 3D file types under 100 MB are ever sent. Remove a phone from the HUD or say "revoke Pixel".

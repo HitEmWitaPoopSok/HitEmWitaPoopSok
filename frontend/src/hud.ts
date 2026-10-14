@@ -32,7 +32,7 @@ export interface Hud {
   noteActivity(tool: string, state: string): void;
   refresh(): void;
   setStyle(s: { theme?: string; sounds?: boolean; dim?: boolean }): void;
-  cue(kind: string): void;
+  cue(kind: string, force?: boolean): void;
 }
 
 type Light = "ok" | "warn" | "bad" | "off";
@@ -131,6 +131,9 @@ export function createHud(hooks: HudHooks): Hud {
   let activity = { tool: "", state: "done", at: 0 };
   let fixDraft = "";
   let pollTimer: number | undefined;
+  let phone: { enabled: boolean; address: string | null; error: string | null;
+               devices: { id: string; name: string; last_seen: number }[] } | null = null;
+  let pairing: { code: string; expires_in: number; address: string | null; knownDevices: number } | null = null;
   let lockState: { enabled: boolean; unlocked: boolean; seconds_left: number } | null = null;
   let health: { turns: number; first_audio_avg: number | null; turn_avg: number | null;
                 tools: { name: string; calls: number; failures: number }[] } | null = null;
@@ -186,11 +189,11 @@ export function createHud(hooks: HudHooks): Hud {
   } catch { /* storage may be blocked */ }
 
   /** A short tone for a state change: listening, working, done. */
-  function cue(kind: string) {
-    if (!sounds) return;
+  function cue(kind: string, force = false) {
+    if (!sounds && !force) return;
     try {
       audio = audio ?? new AudioContext();
-      const seq: Record<string, number[]> = { listening: [660, 880], thinking: [440], done: [880, 660], error: [220, 180] };
+      const seq: Record<string, number[]> = { listening: [660, 880], thinking: [440], done: [880, 660], error: [220, 180], relay: [523, 659, 784] };
       const notes = seq[kind];
       if (!notes) return;
       notes.forEach((f, i) => {
@@ -523,6 +526,50 @@ export function createHud(hooks: HudHooks): Hud {
     actSec.append(el("div", "hud-dim", toolText()));
     panel.append(actSec);
 
+    // phone link: pair the Android app, see and remove phones
+    const [phoneSec] = section("Phone");
+    if (!phone || !phone.enabled) {
+      phoneSec.append(el("div", "hud-dim", "The phone link is off."));
+    } else {
+      const where = phone.address
+        ? el("div", "hud-row hud-mono", `listening on ${phone.address}`)
+        : el("div", "hud-row hud-need", phone.error ?? "not listening");
+      phoneSec.append(where);
+      for (const d of phone.devices) {
+        const row = el("div", "hud-row");
+        row.append(el("span", "grow", d.name),
+          el("span", "hud-dim hud-mono", d.last_seen ? `seen ${clock(d.last_seen)}` : ""));
+        const rm = el("button", "hud-btn", "Remove");
+        rm.type = "button";
+        rm.addEventListener("click", async () => { await post("/api/companion/revoke", { id: d.id }); void pollNow(); });
+        row.append(rm);
+        phoneSec.append(row);
+      }
+    }
+    if (pairing) {
+      phoneSec.append(el("div", "hud-row", "In the app, enter this code:"));
+      const code = el("div", "hud-row hud-mono", pairing.code);
+      code.style.fontSize = "20px";
+      code.style.letterSpacing = "3px";
+      phoneSec.append(code, el("div", "hud-dim", `address ${pairing.address ?? "?"} · expires in ${Math.ceil(pairing.expires_in / 60)} min`));
+    }
+    const pairBtn = el("button", "hud-btn primary", "Pair a phone");
+    pairBtn.type = "button";
+    pairBtn.addEventListener("click", async () => {
+      const r = await post("/api/companion/pair-code");
+      if (r.ok) pairing = { code: r.data.code, expires_in: r.data.expires_in, address: r.data.address ?? null,
+                             knownDevices: phone?.devices.length ?? 0 };
+      void pollNow();
+    });
+    phoneSec.append(pairBtn);
+    if (phone?.enabled) {
+      const off = el("button", "hud-btn", "Turn phone link off");
+      off.type = "button";
+      off.addEventListener("click", async () => { pairing = null; await post("/api/companion/enable", { enabled: false }); void pollNow(); });
+      phoneSec.append(off);
+    }
+    panel.append(phoneSec);
+
     // voice lock: risky tools wait for this button
     if (lockState?.enabled) {
       const [lockSec] = section("Voice lock");
@@ -676,6 +723,12 @@ export function createHud(hooks: HudHooks): Hud {
     busyPolling = true;
     try {
       lockState = (await getJson<NonNullable<typeof lockState>>("/api/lock-status")) ?? lockState;
+      if (isOpen) phone = (await getJson<NonNullable<typeof phone>>("/api/companion/status")) ?? phone;
+      if (pairing) {
+        pairing.expires_in -= 3;
+        // the code is single-use: gone once it expires or a new phone appears
+        if (pairing.expires_in <= 0 || (phone && phone.devices.length > pairing.knownDevices)) pairing = null;
+      }
       if (isOpen) health = (await getJson<NonNullable<typeof health>>("/api/health-stats")) ?? health;
       const [r, s, u, f, st] = await Promise.all([
         getJson<{ runs: RunRow[] }>("/api/runs?status=queued,running&limit=20"),

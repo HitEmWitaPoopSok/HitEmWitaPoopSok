@@ -10,7 +10,7 @@ on:
     inputs:
       version:
         description: "Installer version (x.y.z)"
-        default: "1.3.0"
+        default: "1.4.0"
   push:
     tags: ["v*"]
     branches: ["main", "claude/windows-port-*"]
@@ -49,7 +49,7 @@ jobs:
         run: |
           if ("${{ github.ref_type }}" -eq "tag") { $v = "${{ github.ref_name }}".TrimStart("v") }
           elseif ("${{ inputs.version }}") { $v = "${{ inputs.version }}" }
-          else { $v = "1.3.0" }
+          else { $v = "1.4.0" }
           "version=$v" >> $env:GITHUB_OUTPUT
 
       - name: Build installer

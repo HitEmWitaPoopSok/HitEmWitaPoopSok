@@ -266,6 +266,8 @@ socket.onMessage((msg) => {
     else if (action === "close") hud.close();
     else if (action === "toggle") hud.toggle();
     else hud.open(msg.focus ? String(msg.focus) : undefined);
+  } else if (type === "chime") {
+    hud.cue("relay", true);
   } else if (type === "activity") {
     hud.noteActivity(String(msg.tool ?? ""), String(msg.state ?? "done"));
   } else if (type === "problem") {

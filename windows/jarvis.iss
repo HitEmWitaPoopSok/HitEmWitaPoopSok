@@ -31,6 +31,7 @@ CloseApplications=no
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Shortcuts:"
+Name: "startup"; Description: "Start JARVIS quietly when I sign in to Windows (so my phone can reach him; no browser opens)"; GroupDescription: "Optional components:"
 Name: "browser"; Description: "Download the headless browser JARVIS uses to read web pages (about 150 MB, needs internet)"; GroupDescription: "Optional components:"
 
 [Files]
@@ -43,6 +44,9 @@ Name: "{group}\JARVIS"; Filename: "{app}\JARVIS.exe"
 Name: "{group}\Stop JARVIS"; Filename: "{app}\JARVIS.exe"; Parameters: "--stop"
 Name: "{group}\JARVIS settings and data"; Filename: "{userappdata}\JARVIS"
 Name: "{autodesktop}\JARVIS"; Filename: "{app}\JARVIS.exe"; Tasks: desktopicon
+
+[Registry]
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "JARVIS"; ValueData: """{app}\JARVIS.exe"" --no-browser"; Flags: uninsdeletevalue; Tasks: startup
 
 [Run]
 Filename: "{app}\python\python.exe"; Parameters: "-m playwright install chromium"; StatusMsg: "Downloading the browser component..."; Flags: runhidden; Tasks: browser

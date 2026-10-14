@@ -1898,6 +1898,8 @@ async def lifespan(application: FastAPI):
     await start_brain_and_speech()
     await start_session_watcher()
     toolkit.start_jobs()
+    if companion.enabled():
+        await companion.start_listener()
     # Deliberately not awaited: every check is time-boxed to 5s, so running
     # them inline could hold the server closed for that long before the UI can
     # connect -- and the mic is the first thing the user reaches for. The task
@@ -1909,6 +1911,7 @@ async def lifespan(application: FastAPI):
     yield
 
     await toolkit.stop_jobs()
+    await companion.stop_listener()
     await stop_session_watcher()
     await stop_brain_and_speech()
     try:
@@ -7405,6 +7408,39 @@ async def api_lock():
     return _lock.status()
 
 
+@app.get("/api/companion/status")
+async def api_companion_status():
+    return companion.status_info()
+
+
+@app.post("/api/companion/enable")
+async def api_companion_enable(request: Request):
+    body = await request.json()
+    on = bool(body.get("enabled"))
+    companion.set_enabled(on)
+    if on:
+        return await companion.start_listener()
+    await companion.stop_listener()
+    return companion.status_info()
+
+
+@app.post("/api/companion/pair-code")
+async def api_companion_pair_code():
+    """The HUD's 'Pair a phone'. Starts the link if it was off."""
+    if not companion.enabled():
+        companion.set_enabled(True)
+    if not companion.listener.get("address"):
+        await companion.start_listener()
+    return {**companion.new_pairing_code(), **{k: v for k, v in companion.status_info().items()
+                                                if k in ("address", "error")}}
+
+
+@app.post("/api/companion/revoke")
+async def api_companion_revoke(request: Request):
+    body = await request.json()
+    return {"removed": companion.revoke(str(body.get("id", "")))}
+
+
 @app.get("/api/health-stats")
 async def api_health_stats():
     """Numbers for the HUD's health section: no arguments, no results, no text."""
@@ -7663,7 +7699,18 @@ class _NoPage(toolkit.NoListener):
     pass
 
 
+async def _speak_on_pc(text: str) -> bool:
+    """Say it through the PC's own speakers when no page is open to speak."""
+    try:
+        audio = await _synth_for_speech(text)
+    except Exception:
+        return False
+    return bool(audio) and await local_speaker.play(audio)
+
+
 async def _toolkit_speak(text: str, urgent: bool, wait: bool = False) -> None:
+    if speech is not None and not voice_clients and await _speak_on_pc(text):
+        return
     if speech is None or not voice_clients:
         raise _NoPage()
     utt = await speech.say(text, Priority.URGENT if urgent else Priority.NORMAL)
@@ -7681,6 +7728,46 @@ def _toolkit_projects() -> list:
     except Exception:
         return []
 
+
+import companion                                          # noqa: E402
+import local_speaker                                      # noqa: E402
+
+
+async def _companion_turn(text: str) -> str:
+    """One brain turn for a request from the paired phone: text in, text out."""
+    if brain_instance is None or not brain_instance.ready:
+        return "I'm not ready just yet, sir."
+    prompt = ("[This request comes from the user's phone; they are away from the PC. Answer in "
+              "plain text, at most four short sentences, no lists or symbols. Do not run "
+              "commands or open windows. To get a file to their phone, find it with "
+              "find_files and then use send_to_phone.]\n" + text)
+    result = await brain_instance.turn(prompt, origin="user")
+    return result.text
+
+
+async def _companion_speak_room(text: str, urgent: bool) -> bool:
+    """True only if it was actually audible in the room (a toast does not count)."""
+    if speech is not None and voice_clients:
+        utt = await speech.say(text, Priority.URGENT if urgent else Priority.NORMAL)
+        await speech.wait_for(utt, timeout=60.0)
+        return True
+    return await _speak_on_pc(text)
+
+
+async def _companion_chime() -> None:
+    await _voice_emit({"type": "chime"})
+
+
+def _companion_status() -> dict:
+    ready = bool(brain_instance and brain_instance.ready)
+    return {"jarvis": "ready" if ready else "starting", "page_open": bool(voice_clients),
+            "problems": [t for t in list(_problems.values())[:3] if t]}
+
+
+companion.Hooks.turn = _companion_turn
+companion.Hooks.speak_room = _companion_speak_room
+companion.Hooks.chime = _companion_chime
+companion.Hooks.status = _companion_status
 
 toolkit.Hooks.speak = _toolkit_speak
 toolkit.Hooks.emit = _voice_emit

@@ -127,6 +127,7 @@ KNOWN_TEMPLATE_HASHES = frozenset({
     "f5477b5c31c6cd1b96bd15a120846a39e2a4603983ec3327944351028f3a311f",  # daily brief
     "b74a7239985630266cae9d36914a1fb1a0360381afc5225f889d6d2430547ef2",  # everyday tools
     "cbb26c7e08e266871017cce51a6b8957d97451cb6ad6b3612df5f6371bc9bca8",  # work, writing and connections
+    "a2529e64f7ea6e012ecff9a54e87053db48abf4019a92be3961cfb6f3a950dcd",  # android companion
     "092df6a5e43bc5ed0a31e9f79b1f77cc4849754d1f4ab4807bded122ab97ad5f",  # say "start fresh" when a memory is refused
 })
 

@@ -177,9 +177,9 @@ async def emit(msg: dict) -> None:
 _interceptors: list = []
 
 
-def add_interceptor(fn: Callable[[str], Awaitable[Optional[str]]]) -> None:
+def add_interceptor(fn: Callable[[str], Awaitable[Optional[str]]], first: bool = False) -> None:
     if fn not in _interceptors:
-        _interceptors.append(fn)
+        _interceptors.insert(0, fn) if first else _interceptors.append(fn)
 
 
 async def intercept(text: str) -> Optional[str]:

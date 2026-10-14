@@ -9,7 +9,7 @@ MODULES = [
     "reminders", "lists", "calculator", "clipboard", "filefinder", "focus",
     "routines", "media", "alerts", "summary", "lifelog", "hudstyle",
     "modes", "githubwatch", "codereview", "goals", "thinking", "drafts", "personality",
-    "calendar", "email", "phone", "lock", "desktopui",
+    "calendar", "email", "phone", "lock", "desktopui", "phonefiles",
 ]
 
 
