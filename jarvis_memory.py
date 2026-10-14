@@ -13,7 +13,7 @@ keeping a stale line.
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import data_paths
@@ -385,7 +385,18 @@ def write_journal(text: str, reason: str = "shutdown",
     data_paths.ensure_memory_layout()
     reason = one_line(reason) or "shutdown"
     untrusted_source = one_line(untrusted_source) or None
-    stamp = datetime.now().strftime(_JOURNAL_STAMP_FMT)
+    now = datetime.now()
+    # Strictly after the newest entry already on disk. Windows' clock ticks in
+    # milliseconds, so two writes back to back can read the SAME time, and with
+    # equal stamps the sort fell back to the reason: the older handover could
+    # be carried as the newest one.
+    existing = journal_entries()
+    if existing and existing[-1][0] >= now.strftime(_JOURNAL_STAMP_FMT):
+        try:
+            now = datetime.strptime(existing[-1][0], _JOURNAL_STAMP_FMT) + timedelta(microseconds=1)
+        except ValueError:
+            pass
+    stamp = now.strftime(_JOURNAL_STAMP_FMT)
     path = data_paths.journal_dir() / f"{stamp}-{slugify(reason)}.md"
     n = 2
     while path.exists():

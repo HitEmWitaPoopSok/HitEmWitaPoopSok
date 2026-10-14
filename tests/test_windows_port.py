@@ -400,3 +400,22 @@ async def test_a_dead_brain_is_reported_with_its_reason(monkeypatch):
     assert "command not found" in server._problems["brain"]
     await server._on_brain_state("ready", {})
     assert "brain" not in server._problems
+
+
+def test_journal_entries_written_in_the_same_clock_tick_stay_in_order(tmp_path, monkeypatch):
+    """Windows' clock is coarse: freeze it and the second handover must still
+    sort after the first, not after whichever reason sorts later."""
+    import datetime as real_datetime
+    import jarvis_memory as jm
+    monkeypatch.setenv("JARVIS_DATA_DIR", str(tmp_path))
+    frozen = real_datetime.datetime(2026, 10, 14, 3, 4, 5, 123456)
+
+    class Frozen(real_datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return frozen
+
+    monkeypatch.setattr(jm, "datetime", Frozen)
+    jm.write_journal("older entry", reason="shutdown")
+    jm.write_journal("newer entry", reason="rotation")
+    assert "newer entry" in jm.latest_journal()
