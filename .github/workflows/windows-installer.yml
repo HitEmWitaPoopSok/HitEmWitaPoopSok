@@ -10,7 +10,7 @@ on:
     inputs:
       version:
         description: "Installer version (x.y.z)"
-        default: "1.0.1"
+        default: "1.0.2"
   push:
     tags: ["v*"]
     branches: ["main", "claude/windows-port-*"]
@@ -49,7 +49,7 @@ jobs:
         run: |
           if ("${{ github.ref_type }}" -eq "tag") { $v = "${{ github.ref_name }}".TrimStart("v") }
           elseif ("${{ inputs.version }}") { $v = "${{ inputs.version }}" }
-          else { $v = "1.0.1" }
+          else { $v = "1.0.2" }
           "version=$v" >> $env:GITHUB_OUTPUT
 
       - name: Build installer
@@ -83,6 +83,13 @@ jobs:
           $fishSaved = $false
           if ($ok) {
             try { $fishSaved = (Invoke-RestMethod "http://127.0.0.1:8341/api/settings/status" -UseBasicParsing).env_keys_set.fish_audio } catch {}
+          }
+          if ($ok) {
+            # Upgrade over a RUNNING install: the installer must end the old server itself.
+            $second = Start-Process $setup.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=$PWD\smoke" -Wait -PassThru
+            if ($second.ExitCode -ne 0) { throw "upgrade over a running JARVIS failed (exit $($second.ExitCode))" }
+            if (-not $p.HasExited) { throw "the upgrade left the old server running" }
+            Write-Host "upgrade over a running server succeeded"
           }
           Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
           if ($ok -and -not $fishSaved) { throw "the server does not see the Fish key the installer saved" }

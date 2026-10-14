@@ -152,6 +152,26 @@ begin
   SaveStringsToUTF8File(EnvFile, Lines, False);
 end;
 
+{ An upgrade cannot replace python.exe and its DLLs while the old JARVIS server
+  is running from the install folder. End every process that runs from there. }
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Dir, Params: String;
+  ResultCode: Integer;
+begin
+  Result := '';
+  Dir := WizardDirValue;
+  if DirExists(Dir) then
+  begin
+    StringChangeEx(Dir, '''', '''''', True);
+    Params := '-NoProfile -ExecutionPolicy Bypass -Command "Get-Process | Where-Object { $_.Path -and ' +
+              '$_.Path.StartsWith(''' + Dir + '\'', [StringComparison]::OrdinalIgnoreCase) } | ' +
+              'Stop-Process -Force -ErrorAction SilentlyContinue"';
+    Exec('powershell.exe', Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Sleep(1500);
+  end;
+end;
+
 function ClaudeOnPath(): Boolean;
 begin
   Result := FileSearch('claude.exe', GetEnv('PATH')) <> '';
