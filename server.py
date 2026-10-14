@@ -101,6 +101,20 @@ log = logging.getLogger("jarvis")
 
 FISH_API_KEY = os.getenv("FISH_API_KEY", "")
 FISH_VOICE_ID = os.getenv("FISH_VOICE_ID", "612b878b113047d9a770c069c8b4fdfe")  # JARVIS (MCU)
+
+
+def _fish_credentials() -> tuple[str, str]:
+    """(api key, voice id) as they are NOW.
+
+    Read from the environment on every call, not captured at import: the
+    settings panel (and the installer's first-run page) write the key into
+    `.env` and `os.environ` while the server is already running, and a value
+    frozen at import meant JARVIS stayed silent until a restart nobody knew
+    to do.
+    """
+    key = os.environ.get("FISH_API_KEY", FISH_API_KEY).strip()
+    voice = (os.environ.get("FISH_VOICE_ID", "").strip() or FISH_VOICE_ID)
+    return key, voice
 FISH_API_URL = "https://api.fish.audio/v1/tts"
 USER_NAME = os.getenv("USER_NAME", "sir")
 _SKIP_PERMISSIONS = os.getenv("JARVIS_SKIP_PERMISSIONS", "true").lower() not in ("0", "false", "no")
@@ -466,7 +480,8 @@ _last_greeting_time: float = 0
 
 async def synthesize_speech(text: str) -> Optional[bytes]:
     """Generate speech audio from text using Fish Audio TTS."""
-    if not FISH_API_KEY:
+    api_key, voice_id = _fish_credentials()
+    if not api_key:
         log.warning("FISH_API_KEY not set, skipping TTS")
         return None
 
@@ -475,12 +490,12 @@ async def synthesize_speech(text: str) -> Optional[bytes]:
             response = await http.post(
                 FISH_API_URL,
                 headers={
-                    "Authorization": f"Bearer {FISH_API_KEY}",
+                    "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
                 },
                 json={
                     "text": text,
-                    "reference_id": FISH_VOICE_ID,
+                    "reference_id": voice_id,
                     "format": "mp3",
                 },
             )
@@ -615,7 +630,8 @@ async def _voice_emit(msg: dict) -> None:
 
 
 async def _synth_for_speech(text: str) -> Optional[bytes]:
-    r = await tts.synthesize_chunk(text, api_key=FISH_API_KEY, voice_id=FISH_VOICE_ID, client=_tts_client)
+    api_key, voice_id = _fish_credentials()
+    r = await tts.synthesize_chunk(text, api_key=api_key, voice_id=voice_id, client=_tts_client)
     if r is None:
         return None
     _session_tokens["tts_calls"] += 1
@@ -6850,7 +6866,8 @@ async def api_settings_keys(body: KeyUpdate):
 
 @app.post("/api/settings/test-fish")
 async def api_test_fish(body: KeyTest):
-    key = body.key_value or os.getenv("FISH_API_KEY", "")
+    saved_key, voice_id = _fish_credentials()
+    key = body.key_value or saved_key
     if not key:
         return {"valid": False, "error": "No key provided"}
     try:
@@ -6858,12 +6875,19 @@ async def api_test_fish(body: KeyTest):
             resp = await client.post(
                 "https://api.fish.audio/v1/tts",
                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                json={"text": "test", "reference_id": FISH_VOICE_ID},
+                json={"text": "test", "reference_id": voice_id},
             )
             if resp.status_code in (200, 201):
                 return {"valid": True}
             elif resp.status_code == 401:
                 return {"valid": False, "error": "Invalid API key"}
+            elif resp.status_code == 402:
+                return {"valid": False,
+                        "error": "The key works but the account has no credit (HTTP 402)"}
+            elif resp.status_code in (400, 404, 422):
+                return {"valid": False,
+                        "error": f"The key is accepted but voice {voice_id} was refused "
+                                 f"(HTTP {resp.status_code}) - pick another voice ID"}
             else:
                 return {"valid": False, "error": f"HTTP {resp.status_code}"}
     except Exception as e:

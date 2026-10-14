@@ -317,3 +317,18 @@ def test_a_written_template_is_byte_identical_to_the_text(tmp_path):
     text = "# JARVIS\n\nline two\n"
     assert data_paths._write_atomically(target, text)
     assert target.read_bytes() == text.encode("utf-8")
+
+
+def test_a_fish_key_saved_while_running_is_used_without_a_restart(monkeypatch):
+    """The key was captured at import, so one entered in the settings panel (or
+    written by the installer after the server started) never reached the
+    speech code and JARVIS stayed silent until a restart."""
+    import server
+    monkeypatch.delenv("FISH_API_KEY", raising=False)
+    monkeypatch.delenv("FISH_VOICE_ID", raising=False)
+    assert server._fish_credentials()[0] == ""
+    monkeypatch.setenv("FISH_API_KEY", "  sk-fish-new  ")
+    monkeypatch.setenv("FISH_VOICE_ID", "voice-xyz")
+    assert server._fish_credentials() == ("sk-fish-new", "voice-xyz")
+    monkeypatch.setenv("FISH_VOICE_ID", "")
+    assert server._fish_credentials()[1] == server.FISH_VOICE_ID

@@ -44,7 +44,8 @@ async def synthesize_chunk(text: str, *, api_key: str, voice_id: str,
             timeout=timeout,
         ) as resp:
             if resp.status_code != 200:
-                log.error(f"TTS {resp.status_code} for {text[:40]!r}")
+                detail = (await resp.aread())[:200].decode("utf-8", "replace")
+                log.error(f"TTS {resp.status_code} for {text[:40]!r}: {detail}")
                 return None
             async for part in resp.aiter_bytes():
                 if first is None:
