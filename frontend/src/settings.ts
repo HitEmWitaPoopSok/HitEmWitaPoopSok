@@ -264,8 +264,10 @@ function wireEvents() {
     try {
       const result = await apiPost<{ valid: boolean; error?: string }>("/api/settings/test-fish", { key_value: key || undefined });
       setDotStatus("status-fish", result.valid ? "green" : "red");
+      showFishTestMessage(result.valid ? "Key and voice accepted." : (result.error || "Fish Audio refused the request."));
     } catch {
       setDotStatus("status-fish", "red");
+      showFishTestMessage("Could not reach the JARVIS server to run the test.");
     }
   });
 
@@ -279,6 +281,20 @@ function wireEvents() {
 
   // Setup next button
   document.getElementById("btn-setup-next")?.addEventListener("click", advanceSetup);
+}
+
+/** Say WHY the Fish test failed, beside the dot, instead of only colouring it. */
+function showFishTestMessage(text: string) {
+  const dot = document.getElementById("status-fish");
+  if (!dot || !dot.parentElement) return;
+  let msg = document.getElementById("fish-test-msg");
+  if (!msg) {
+    msg = document.createElement("div");
+    msg.id = "fish-test-msg";
+    msg.style.cssText = "font-size:12px;opacity:0.85;margin-top:6px;word-break:break-word;";
+    dot.parentElement.insertAdjacentElement("afterend", msg);
+  }
+  msg.textContent = text;
 }
 
 // ---------------------------------------------------------------------------
