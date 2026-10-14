@@ -115,3 +115,28 @@ toolkit.register(toolkit.Tool(
 A plugin runs with JARVIS's own rights, so only put there code you trust. A
 plugin cannot replace a built-in tool, and one that fails to load is skipped
 and logged.
+
+## Work, writing and connections
+
+| Say | What happens |
+|---|---|
+| "What's on my calendar tomorrow?", "when's my next meeting?" | `calendar`, read-only. Paste your calendar's secret **iCal link** in settings. He warns you ~10 minutes before a meeting |
+| "Any unread email?", "find mail about the invoice" | `inbox`, read-only: senders and subjects only, never bodies; he can't send, reply or delete. Use an **app password** (Gmail/Outlook/iCloud), set in settings |
+| "Watch jarvis-org/app on GitHub" | `github_watch`: tells you when a build fails or passes or a PR opens/merges. Private repos need `GITHUB_TOKEN` in settings |
+| "Review my last commit" | `review_changes`: he talks you through the diff |
+| "Plan my launch next week" | `goals`: tasks he works out and tracks; open goals appear in the daily brief |
+| "Get a second opinion on this" | `second_opinion`: another model weighs in; the answer is spoken when ready |
+| "Read me what I copied" / "read that page" | `read_aloud`; say "stop" to interrupt |
+| "Draft an email to Sam about the delay" | `drafts`: he writes, you approve, he copies it to the clipboard. **He can never send anything** |
+| "Take notes", "start dictating", "wake word on" | `voice_mode`: meeting notes saved in `%APPDATA%\JARVIS\notes`, typing into the focused window, or requiring "Jarvis" before he answers |
+| "Be terse" / "chatty" / "whisper mode" | `speaking_style` |
+| "Push alerts to my phone" | `phone_alerts` through [ntfy](https://ntfy.sh): install the ntfy app, subscribe to a long random topic, put it in settings. Urgent alerts and anything said while no page is open go to your phone |
+| "Turn on the voice lock" | `voice_lock`: risky tools (lights, windows, other apps, runs) refuse until you press **Unlock** on his display (10 minutes). It stops a voice across the room or a video playing aloud; it does **not** stop someone at your keyboard |
+| "Click Save in Notepad", "type this into that box" | `desktop_ui`: Windows UI Automation on the window in front. Never password boxes, system/security windows or terminals; asks before anything that sends, buys or deletes |
+| open `http://localhost:8340/ambient` | The wall display: clock, weather, what's coming up, runs, usage, goals, shopping |
+
+### What is deliberately not here
+- **Speaker (voice-print) recognition.** It can't be made reliable enough to guard anything, so the voice lock uses a click instead.
+- **Webcam presence or gestures.** It needs camera access and machine-learning models, and the privacy cost isn't worth it.
+- **Approving things from your phone.** ntfy can't reach back into your PC without exposing it to the internet.
+- **A fully offline brain.** JARVIS's brain is Claude Code; swapping in a local model is a separate project.

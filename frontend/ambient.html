@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JARVIS · Ambient</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #02060c; color: #bfe7ff;
+        font-family: "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+      #wall { height: 100%; display: grid; grid-template-columns: 1.3fr 1fr; gap: 3vw;
+        padding: 5vh 5vw; box-sizing: border-box; }
+      #clock { font-size: 14vw; font-weight: 200; letter-spacing: 0.02em; line-height: 1;
+        text-shadow: 0 0 40px rgba(56,189,248,0.45); }
+      #date { font-size: 2.6vw; opacity: 0.7; margin-top: 1vh; }
+      #weather { font-size: 2.4vw; margin-top: 4vh; color: #7dd3fc; }
+      #focus { margin-top: 3vh; font-size: 2vw; color: #fbbf24; min-height: 2.4vw; }
+      .card { border: 1px solid rgba(56,189,248,0.3); padding: 1.6vh 1.6vw; margin-bottom: 2.4vh;
+        background: rgba(14,165,233,0.05); }
+      .card h2 { margin: 0 0 1vh; font-size: 1.1vw; letter-spacing: 0.3em; text-transform: uppercase;
+        color: rgba(125,211,252,0.6); font-weight: 400; }
+      .card div { font-size: 1.6vw; padding: 0.3vh 0; }
+      .bar { height: 0.8vh; background: rgba(56,189,248,0.15); margin: 0.4vh 0 1vh; }
+      .bar i { display: block; height: 100%; background: linear-gradient(90deg,#0ea5e9,#67e8f9); }
+      .hot { background: linear-gradient(90deg,#f59e0b,#f87171) !important; }
+      .dim { opacity: 0.55; }
+      @media (max-width: 900px) { #wall { grid-template-columns: 1fr; } #clock { font-size: 22vw; }
+        .card h2 { font-size: 3vw; } .card div { font-size: 4vw; } #date, #weather { font-size: 4vw; } }
+    </style>
+  </head>
+  <body>
+    <div id="wall">
+      <div>
+        <div id="clock">--:--</div>
+        <div id="date"></div>
+        <div id="weather"></div>
+        <div id="focus"></div>
+      </div>
+      <div id="side"></div>
+    </div>
+    <script type="module" src="/src/ambient.ts"></script>
+  </body>
+</html>

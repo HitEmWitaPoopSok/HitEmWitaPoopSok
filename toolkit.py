@@ -109,11 +109,12 @@ def allowed_names() -> list[str]:
 # ── hooks the server fills in ──────────────────────────────────────────────
 
 class Hooks:
-    speak: Optional[Callable[[str, bool], Awaitable[None]]] = None    # (text, urgent)
+    speak: Optional[Callable[..., Awaitable[None]]] = None            # (text, urgent, wait)
     emit: Optional[Callable[[dict], Awaitable[None]]] = None          # to the page
     notify: Optional[Callable[[str, str], Awaitable[bool]]] = None    # (title, text)
     handlers: dict = {}                                               # TOOL_HANDLERS
     wrapper: Optional[Callable[[str], str]] = None
+    phone: Optional[Callable[..., Awaitable[bool]]] = None             # push to the phone
     project_paths: Callable[[], list] = staticmethod(lambda: [])
 
 
@@ -126,25 +127,37 @@ def focus_active() -> bool:
     return until > time.time()
 
 
-async def say(text: str, urgent: bool = False) -> bool:
+async def say(text: str, urgent: bool = False, wait: bool = False) -> bool:
     """Speak (and notify) something unprompted. Non-urgent speech is held back
     during a focus session. Returns whether it was delivered."""
     if not urgent and focus_active():
         return False
+    spoke = False
     if Hooks.speak:
         try:
-            await Hooks.speak(text, urgent)
-            return True
+            await Hooks.speak(text, urgent, wait)
+            spoke = True
         except NoListener:
             pass                                   # nobody has the page open: toast instead
         except Exception:
             log.warning("could not speak %r", text[:40], exc_info=True)
-    if Hooks.notify:
+    # The phone gets urgent things, and everything when nobody is at the page.
+    pushed = False
+    if Hooks.phone and (urgent or not spoke):
         try:
-            return bool(await Hooks.notify("JARVIS", text))
+            from features import phone
+            if phone.enabled():
+                pushed = bool(await Hooks.phone(text))
         except Exception:
             pass
-    return False
+    if spoke:
+        return True
+    if Hooks.notify:
+        try:
+            return bool(await Hooks.notify("JARVIS", text)) or pushed
+        except Exception:
+            pass
+    return pushed
 
 
 async def emit(msg: dict) -> None:
@@ -153,6 +166,55 @@ async def emit(msg: dict) -> None:
             await Hooks.emit(msg)
         except Exception:
             pass
+
+
+# ── what the user says, before the brain hears it ──────────────────────────
+#
+# An interceptor sees every final transcript. It returns the text to carry on
+# with (possibly changed), or None when it has consumed the utterance (notes,
+# dictation, a sentence not addressed to JARVIS). They run in order.
+
+_interceptors: list = []
+
+
+def add_interceptor(fn: Callable[[str], Awaitable[Optional[str]]]) -> None:
+    if fn not in _interceptors:
+        _interceptors.append(fn)
+
+
+async def intercept(text: str) -> Optional[str]:
+    for fn in _interceptors:
+        try:
+            text = await fn(text)
+        except Exception:
+            log.warning("interceptor %s failed", getattr(fn, "__name__", fn), exc_info=True)
+            continue
+        if text is None:
+            return None
+    return text
+
+
+# ── gates: a check every acting tool call passes before it runs ────────────
+
+_gates: list = []
+
+
+def add_gate(fn: Callable[[str], Optional[str]]) -> None:
+    if fn not in _gates:
+        _gates.append(fn)
+
+
+def check_gates(tool: str) -> Optional[str]:
+    """A refusal sentence from the first gate that objects, or None."""
+    for fn in _gates:
+        try:
+            refusal = fn(tool)
+        except Exception:
+            log.warning("gate %s failed", getattr(fn, "__name__", fn), exc_info=True)
+            continue
+        if refusal:
+            return refusal
+    return None
 
 
 # ── a tiny JSON store ──────────────────────────────────────────────────────

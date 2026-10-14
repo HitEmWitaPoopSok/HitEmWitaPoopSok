@@ -18,7 +18,7 @@ def run(coro):
 def spoken(monkeypatch):
     said = []
 
-    async def speak(text, urgent):
+    async def speak(text, urgent, wait=False):
         said.append((text, urgent))
 
     monkeypatch.setattr(toolkit.Hooks, "speak", speak)
@@ -367,3 +367,14 @@ def test_every_feature_tool_is_registered_and_decided():
                  "routine", "media_control", "alerts", "daily_summary", "life_log", "hud_style"):
         t = toolkit.tools()[name]
         assert bool(t.taint) != bool(t.exempt)
+
+
+def test_the_installer_ships_every_package_directory():
+    """The smoke test caught `features/` missing from the installer once; hold it here."""
+    import re
+    from pathlib import Path
+    root = Path(__file__).parent.parent
+    script = (root / "windows" / "build.ps1").read_text(encoding="utf-8")
+    shipped = set(re.findall(r'"([^"]+)"', re.search(r"\$items\s*=\s*(.+)", script).group(1)))
+    packages = {p.parent.name for p in root.glob("*/__init__.py") if p.parent.name not in {"tests", "windows"}}
+    assert packages <= shipped, f"not shipped: {sorted(packages - shipped)}"

@@ -29,7 +29,8 @@ import sys
 SCRUBBED_ENV_PREFIXES = ("CLAUDE_CODE_", "ANTHROPIC_")
 # HOMEASSISTANT_TOKEN: no spawned run has any business holding the key to the
 # user's house; only the server's own `smart_home` tool uses it.
-SCRUBBED_ENV_KEYS = {"CLAUDECODE", "HOMEASSISTANT_TOKEN"}
+SCRUBBED_ENV_KEYS = {"CLAUDECODE", "HOMEASSISTANT_TOKEN", "EMAIL_APP_PASSWORD",
+                     "CALENDAR_ICS_URL", "NTFY_TOPIC", "GITHUB_TOKEN"}
 
 # asyncio.create_subprocess_exec gives a child's stdout/stderr StreamReader a
 # 64 KiB *line* buffer by default (asyncio.streams._DEFAULT_LIMIT). `claude -p

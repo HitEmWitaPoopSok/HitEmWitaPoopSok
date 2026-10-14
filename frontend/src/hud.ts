@@ -131,6 +131,9 @@ export function createHud(hooks: HudHooks): Hud {
   let activity = { tool: "", state: "done", at: 0 };
   let fixDraft = "";
   let pollTimer: number | undefined;
+  let lockState: { enabled: boolean; unlocked: boolean; seconds_left: number } | null = null;
+  let health: { turns: number; first_audio_avg: number | null; turn_avg: number | null;
+                tools: { name: string; calls: number; failures: number }[] } | null = null;
 
   // ── DOM ──────────────────────────────────────────────────────────────
   const root = el("div");
@@ -520,6 +523,42 @@ export function createHud(hooks: HudHooks): Hud {
     actSec.append(el("div", "hud-dim", toolText()));
     panel.append(actSec);
 
+    // voice lock: risky tools wait for this button
+    if (lockState?.enabled) {
+      const [lockSec] = section("Voice lock");
+      const row = el("div", "hud-row");
+      row.append(el("span", `hud-dot ${lockState.unlocked ? "ok" : "warn"}`),
+        el("span", "grow", lockState.unlocked
+          ? `open for ${Math.floor(lockState.seconds_left / 60) + 1} more min`
+          : "locked — risky actions wait for you"));
+      const btn = el("button", "hud-btn" + (lockState.unlocked ? "" : " primary"),
+        lockState.unlocked ? "Lock now" : "Unlock 10 min");
+      btn.type = "button";
+      btn.addEventListener("click", async () => {
+        await post(lockState!.unlocked ? "/api/lock" : "/api/unlock", { minutes: 10 });
+        void pollNow();
+      });
+      row.append(btn);
+      lockSec.append(row);
+      panel.append(lockSec);
+    }
+
+    // health: how he is performing, from counters kept in memory
+    const [healthSec] = section("Health");
+    if (!health || !health.turns) {
+      healthSec.append(el("div", "hud-dim", "no conversations yet this session"));
+    } else {
+      const speed = health.first_audio_avg !== null ? `${health.first_audio_avg}s to first word` : "no voice timing yet";
+      healthSec.append(el("div", "hud-row", `${health.turns} turns · ${speed} · ${health.turn_avg}s per turn`));
+      for (const t of health.tools) {
+        const row = el("div", "hud-row");
+        row.append(el("span", "grow hud-mono", t.name), el("span", "hud-mono", `${t.calls}`),
+          el("span", t.failures ? "hud-need hud-mono" : "hud-dim hud-mono", t.failures ? `${t.failures} failed` : "ok"));
+        healthSec.append(row);
+      }
+    }
+    panel.append(healthSec);
+
     // fix yourself
     panel.append(renderFix());
     panel.scrollTop = keepScroll;
@@ -636,6 +675,8 @@ export function createHud(hooks: HudHooks): Hud {
     if (busyPolling) return;
     busyPolling = true;
     try {
+      lockState = (await getJson<NonNullable<typeof lockState>>("/api/lock-status")) ?? lockState;
+      if (isOpen) health = (await getJson<NonNullable<typeof health>>("/api/health-stats")) ?? health;
       const [r, s, u, f, st] = await Promise.all([
         getJson<{ runs: RunRow[] }>("/api/runs?status=queued,running&limit=20"),
         getJson<{ sessions: SessionRow[] }>("/api/sessions?state=needs_you"),

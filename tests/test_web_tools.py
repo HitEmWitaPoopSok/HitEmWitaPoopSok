@@ -214,7 +214,11 @@ def test_the_reader_set_is_every_acting_tool_that_only_reads(wired):
         # toolkit features that read the user's own machine and are used in
         # the same breath as what they find: find a file then open it, read
         # the clipboard then write it back, search the log.
-        "clipboard", "find_files", "life_log"}
+        "clipboard", "find_files", "life_log",
+        # read-then-act features: notes, builds, diffs, the calendar, the
+        # inbox and an app's controls. Each is gated in its own way (the voice
+        # lock, a spoken confirmation, no bodies, no sending).
+        "voice_mode", "github_watch", "review_changes", "calendar", "inbox", "desktop_ui"}
     assert "manage_window" not in server.UNTRUSTED_READING_TOOLS
     assert server.UNTRUSTED_READING_TOOLS <= server.ACTING_TOOLS, \
         "a name in here that is not an acting tool gates nothing and is a typo"

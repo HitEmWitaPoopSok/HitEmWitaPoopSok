@@ -58,7 +58,7 @@ if _env_path.exists():
         os.environ.setdefault(_k, _v)
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from collections.abc import Mapping
 from typing import Optional
@@ -1758,6 +1758,7 @@ async def _handle_utterance(text: str) -> None:
         # wait for playback so the latency line is accurate rather than early.
         await speech.wait_for(utt, timeout=120.0)
         first_audio = (utt.first_sent_at - t0) if utt.first_sent_at is not None else None
+        _note_latency(first_audio, time.monotonic() - t0)
         log.info("latency: first_delta=%s first_audio=%s turn=%.2fs ctx=%d out=%d tools=%s",
                  f"{result.first_delta_sec:.2f}s" if result.first_delta_sec is not None else "none",
                  f"{first_audio:.2f}s" if first_audio is not None else "none",
@@ -2670,6 +2671,23 @@ def _bearer_token_matches(header_value: str, expected: str) -> bool:
         return False
 
 
+# Counters for the HUD's health section. Names and numbers only, kept in
+# memory, never persisted.
+_tool_stats: dict[str, list[int]] = {}
+_latencies: list[tuple[float, float]] = []
+
+
+def _note_latency(first_audio, turn) -> None:
+    _latencies.append((-1.0 if first_audio is None else float(first_audio), float(turn)))
+    del _latencies[:-30]
+
+
+def _note_tool(tool: str, failed: bool) -> None:
+    row = _tool_stats.setdefault(tool, [0, 0])
+    row[0] += 1
+    row[1] += int(failed)
+
+
 async def _announce_activity(tool: str, state: str) -> None:
     """Tell the page which tool JARVIS is using, for its activity strip. The
     name only: never the arguments, never the result."""
@@ -2719,6 +2737,10 @@ async def internal_tool(request: Request):
         # origin is "user". And for a memory writer the TURN is not enough
         # either — see `_writer_untrusted_source` and
         # `_untrusted_content_refusal`.
+        locked = toolkit.check_gates(tool)
+        if locked:
+            await _voice_emit({"type": "hud", "action": "open", "focus": "lock"})
+            return _tool_reply(False, locked)
         source = _writer_untrusted_source(tool)
         refusal = _untrusted_content_refusal(
             tool, source is not None, source=source or "something I read")
@@ -2734,9 +2756,11 @@ async def internal_tool(request: Request):
             result = await result
     except Exception as e:
         log.error(f"tool {tool} failed: {e}", exc_info=True)
+        _note_tool(tool, True)
         await _announce_activity(tool, "done")
         return _tool_reply(False, f"That tool failed: {e}")
     await _announce_activity(tool, "done")
+    _note_tool(tool, False)
     # The turn now holds whatever that tool brought back. Marked HERE, once,
     # rather than in each handler: a reader added later cannot forget, and
     # `TAINTING_TOOLS` is then the entire decision, in one readable place.
@@ -6462,6 +6486,21 @@ async def tool_daily_brief(args: dict) -> str:
     else:
         lines.append("Runs in the last day: none.")
     lines.append(tool_usage_status({}))
+    try:
+        from features import goals as _goals
+        lines.extend(_goals.brief_lines())
+    except Exception:
+        pass
+    try:
+        from features import calendar as _cal
+        if _cal.url():
+            now = datetime.now()
+            rows = _cal.between(await _cal.load(), now - timedelta(hours=1),
+                                now.replace(hour=23, minute=59, second=59))
+            lines.append("Calendar today: " + ("; ".join(_cal.line(w, e) for w, e in rows[:6])
+                                                if rows else "nothing."))
+    except Exception:
+        pass
     return _wrap_untrusted(_BRIEF_WRAP_NAME, "\n".join(lines))
 
 
@@ -7069,6 +7108,9 @@ async def voice_handler(ws: WebSocket):
                     log.info(f"User ({verdict}, ignored, {ago}): {text}")
                     continue
                 log.info(f"User: {text}")
+                text = await toolkit.intercept(text)
+                if text is None:
+                    continue
                 if _is_fresh_start(text):
                     _spawn(_start_fresh())
                     continue
@@ -7096,6 +7138,8 @@ async def voice_handler(ws: WebSocket):
 SETTABLE_ENV_KEYS = frozenset({
     "FISH_API_KEY", "FISH_VOICE_ID", "USER_NAME", "HONORIFIC",
     "HOMEASSISTANT_URL", "HOMEASSISTANT_TOKEN",
+    "CALENDAR_ICS_URL", "EMAIL_IMAP_HOST", "EMAIL_USER", "EMAIL_APP_PASSWORD",
+    "NTFY_TOPIC", "GITHUB_TOKEN",
 })
 
 # A value may not carry anything that ends the line it is written on.
@@ -7291,9 +7335,126 @@ async def api_settings_status():
             "fish_voice_id": bool(env_dict.get("FISH_VOICE_ID", "").strip()),
             "home_assistant": bool(env_dict.get("HOMEASSISTANT_URL", "").strip()
                                    and env_dict.get("HOMEASSISTANT_TOKEN", "").strip()),
+            "calendar": bool(env_dict.get("CALENDAR_ICS_URL", "").strip()),
+            "email": all(env_dict.get(k, "").strip() for k in
+                         ("EMAIL_IMAP_HOST", "EMAIL_USER", "EMAIL_APP_PASSWORD")),
+            "phone": bool(env_dict.get("NTFY_TOPIC", "").strip()),
+            "github": bool(env_dict.get("GITHUB_TOKEN", "").strip()),
             "user_name": env_dict.get("USER_NAME", ""),
         },
     }
+
+@app.post("/api/settings/test-calendar")
+async def api_test_calendar():
+    from features import calendar as _cal
+    if not _cal.url():
+        return {"valid": False, "error": "Paste the secret iCal link (it starts with https://) and save first"}
+    try:
+        events = await _cal.load(force=True)
+        return {"valid": True, "entities": len(events)}
+    except Exception as e:
+        return {"valid": False, "error": f"Couldn't read it ({type(e).__name__})"}
+
+
+@app.post("/api/settings/test-email")
+async def api_test_email():
+    from features import email as _mail
+    if not _mail.creds():
+        return {"valid": False, "error": "Fill in the server, address and app password, and save first"}
+    try:
+        rows = await asyncio.wait_for(asyncio.to_thread(_mail.fetch, True, ""), 15.0)
+        return {"valid": True, "entities": len(rows)}
+    except Exception as e:
+        return {"valid": False, "error": f"Couldn't sign in ({type(e).__name__}) — use an app password"}
+
+
+@app.post("/api/settings/test-phone")
+async def api_test_phone():
+    from features import phone as _phone
+    if not _phone.topic():
+        return {"valid": False, "error": "Save a topic of 8-64 letters, numbers, - or _ first"}
+    ok = await _phone.push("This is JARVIS. Your phone is connected.")
+    return {"valid": ok, "error": None if ok else "ntfy didn't accept that"}
+
+
+@app.get("/api/lock-status")
+async def api_lock_status():
+    from features import lock as _lock
+    return _lock.status()
+
+
+@app.post("/api/unlock")
+async def api_unlock(request: Request):
+    """The HUD's Unlock button. A POST, so it needs an Origin JARVIS serves from."""
+    from features import lock as _lock
+    try:
+        body = await request.json()
+        minutes = float(body.get("minutes", _lock.DEFAULT_MINUTES))
+    except Exception:
+        minutes = _lock.DEFAULT_MINUTES
+    if request.headers.get("origin") is None:
+        raise HTTPException(status_code=403, detail="unlock must come from the page")
+    _lock.unlock(minutes)
+    return _lock.status()
+
+
+@app.post("/api/lock")
+async def api_lock():
+    from features import lock as _lock
+    _lock.lock_now()
+    return _lock.status()
+
+
+@app.get("/api/health-stats")
+async def api_health_stats():
+    """Numbers for the HUD's health section: no arguments, no results, no text."""
+    firsts = [a for a, _t in _latencies if a >= 0]
+    turns = [t for _a, t in _latencies]
+    top = sorted(_tool_stats.items(), key=lambda kv: -kv[1][0])[:8]
+    return {
+        "uptime_seconds": int(time.time() - _session_start),
+        "turns": len(turns),
+        "first_audio_avg": round(sum(firsts) / len(firsts), 2) if firsts else None,
+        "turn_avg": round(sum(turns) / len(turns), 2) if turns else None,
+        "tools": [{"name": n, "calls": c[0], "failures": c[1]} for n, c in top],
+        "problems": len(_problems),
+    }
+
+
+@app.get("/api/ambient")
+async def api_ambient():
+    """Everything the always-on wall display shows. Read-only."""
+    weather = None
+    try:
+        weather = await asyncio.wait_for(asyncio.to_thread(_fetch_weather_string_sync), 4.0)
+    except Exception:
+        pass
+    soon = sorted((r for r in toolkit.load_json("reminders", []) if not r.get("every")),
+                  key=lambda r: r["due"])[:4]
+    try:
+        runs = [r for r in run_store.list_runs(limit=20) if r["created_at"] >= time.time() - 86400]
+    except Exception:
+        runs = []
+    goals = []
+    try:
+        from features import goals as _goals
+        goals = _goals.brief_lines()
+    except Exception:
+        pass
+    snap = usage_store.snapshot()
+    return {
+        "weather": weather,
+        "reminders": [{"text": r["text"][:80], "due": r["due"]} for r in soon],
+        "shopping": toolkit.load_json("lists", {}).get("shopping", [])[:8],
+        "goals": goals,
+        "runs": {"active": sum(r["status"] in ("running", "queued") for r in runs),
+                 "failed": sum(r["status"] == "failed" for r in runs),
+                 "succeeded": sum(r["status"] == "succeeded" for r in runs)},
+        "usage": [{"label": w["label"], "pct": w["utilization"]} for w in snap.get("windows", [])
+                  if w.get("utilization") is not None and not w.get("expired")],
+        "focus": toolkit.focus_active(),
+    }
+
 
 @app.get("/api/settings/preferences")
 async def api_get_preferences():
@@ -7459,6 +7620,10 @@ if FRONTEND_DIST.exists():
     async def serve_index():
         return FileResponse(str(FRONTEND_DIST / "index.html"), headers=_NO_STORE)
 
+    @app.get("/ambient")
+    async def serve_ambient():
+        return FileResponse(str(FRONTEND_DIST / "ambient.html"), headers=_NO_STORE)
+
     @app.get("/dashboard")
     async def serve_dashboard():
         return FileResponse(str(FRONTEND_DIST / "dashboard.html"), headers=_NO_STORE)
@@ -7498,10 +7663,12 @@ class _NoPage(toolkit.NoListener):
     pass
 
 
-async def _toolkit_speak(text: str, urgent: bool) -> None:
+async def _toolkit_speak(text: str, urgent: bool, wait: bool = False) -> None:
     if speech is None or not voice_clients:
         raise _NoPage()
-    await speech.say(text, Priority.URGENT if urgent else Priority.NORMAL)
+    utt = await speech.say(text, Priority.URGENT if urgent else Priority.NORMAL)
+    if wait:
+        await speech.wait_for(utt, timeout=120.0)
 
 
 async def _toolkit_notify(title: str, text: str) -> bool:

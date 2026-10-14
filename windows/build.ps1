@@ -43,7 +43,7 @@ foreach ($dev in "pytest", "_pytest", "pytest_asyncio", "iniconfig", "pluggy") {
 }
 
 Step "Application files"
-$items = "*.py", "requirements.txt", ".env.example", "LICENSE", "jarvis_home", "migrations", "skills", "data"
+$items = "*.py", "requirements.txt", ".env.example", "LICENSE", "jarvis_home", "migrations", "skills", "data", "features"
 foreach ($i in $items) {
     Get-ChildItem -Path $root -Filter $i -ErrorAction SilentlyContinue | ForEach-Object {
         Copy-Item $_.FullName "$stage\app" -Recurse -Force

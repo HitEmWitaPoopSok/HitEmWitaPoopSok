@@ -17,6 +17,10 @@ interface StatusResponse {
     fish_audio: boolean;
     fish_voice_id: boolean;
     home_assistant: boolean;
+    calendar: boolean;
+    email: boolean;
+    phone: boolean;
+    github: boolean;
     user_name: string;
   };
 }
@@ -106,6 +110,47 @@ function buildPanelHTML(): string {
               <input type="password" id="input-ha-token" placeholder="Profile page, bottom: Long-lived access tokens" />
               <button class="settings-btn" id="btn-test-ha">Test</button>
               <span class="status-dot" id="status-ha"></span>
+            </div>
+          </div>
+
+          <h3 style="margin-top:18px">Connections (all optional)</h3>
+
+          <div class="settings-field">
+            <label>Calendar &mdash; secret iCal link (Google: calendar settings &rarr; "Secret address in iCal format")</label>
+            <div class="settings-input-row">
+              <input type="password" id="input-cal-url" placeholder="https://calendar.google.com/calendar/ical/..." />
+              <button class="settings-btn" id="btn-test-cal">Test</button>
+              <span class="status-dot" id="status-cal"></span>
+            </div>
+          </div>
+
+          <div class="settings-field">
+            <label>Email (read-only) &mdash; IMAP server, address, and an <b>app password</b></label>
+            <div class="settings-input-row">
+              <input type="text" id="input-mail-host" placeholder="imap.gmail.com" />
+              <input type="text" id="input-mail-user" placeholder="you@example.com" />
+            </div>
+            <div class="settings-input-row">
+              <input type="password" id="input-mail-pass" placeholder="App password" />
+              <button class="settings-btn" id="btn-test-mail">Test</button>
+              <span class="status-dot" id="status-mail"></span>
+            </div>
+          </div>
+
+          <div class="settings-field">
+            <label>Phone alerts &mdash; ntfy topic (install the ntfy app, subscribe to a long random topic)</label>
+            <div class="settings-input-row">
+              <input type="password" id="input-ntfy" placeholder="e.g. jarvis-8f3k2n9x4q" />
+              <button class="settings-btn" id="btn-test-phone">Test</button>
+              <span class="status-dot" id="status-phone"></span>
+            </div>
+          </div>
+
+          <div class="settings-field">
+            <label>GitHub token (optional, only for watching private repos)</label>
+            <div class="settings-input-row">
+              <input type="password" id="input-gh-token" placeholder="ghp_..." />
+              <span class="status-dot" id="status-gh"></span>
             </div>
           </div>
 
@@ -208,6 +253,10 @@ async function loadStatus() {
     // API key status dots
     setDotStatus("status-fish", status.env_keys_set.fish_audio ? "green" : "red");
     setDotStatus("status-ha", status.env_keys_set.home_assistant ? "green" : "off");
+    setDotStatus("status-cal", status.env_keys_set.calendar ? "green" : "off");
+    setDotStatus("status-mail", status.env_keys_set.email ? "green" : "off");
+    setDotStatus("status-phone", status.env_keys_set.phone ? "green" : "off");
+    setDotStatus("status-gh", status.env_keys_set.github ? "green" : "off");
 
     // System info
     const portEl = document.getElementById("sysinfo-port");
@@ -271,6 +320,15 @@ function wireEvents() {
       await apiPost("/api/settings/keys", { key_name: "HOMEASSISTANT_TOKEN", key_value: haToken });
       savedAny = true;
     }
+    const extra: [string, string][] = [
+      ["input-cal-url", "CALENDAR_ICS_URL"], ["input-mail-host", "EMAIL_IMAP_HOST"],
+      ["input-mail-user", "EMAIL_USER"], ["input-mail-pass", "EMAIL_APP_PASSWORD"],
+      ["input-ntfy", "NTFY_TOPIC"], ["input-gh-token", "GITHUB_TOKEN"],
+    ];
+    for (const [id, key] of extra) {
+      const v = (document.getElementById(id) as HTMLInputElement | null)?.value.trim();
+      if (v) { await apiPost("/api/settings/keys", { key_name: key, key_value: v }); savedAny = true; }
+    }
     await loadStatus();
 
     const notice = document.getElementById("keys-restart-notice");
@@ -284,6 +342,25 @@ function wireEvents() {
       await apiPost("/api/settings/keys", { key_name: "FISH_VOICE_ID", key_value: voiceId });
     }
   });
+
+  // Tests for the optional connections: each uses what is saved, so save first
+  for (const [btn, dot, url] of [
+    ["btn-test-cal", "status-cal", "/api/settings/test-calendar"],
+    ["btn-test-mail", "status-mail", "/api/settings/test-email"],
+    ["btn-test-phone", "status-phone", "/api/settings/test-phone"],
+  ] as const) {
+    document.getElementById(btn)?.addEventListener("click", async () => {
+      setDotStatus(dot, "yellow");
+      try {
+        const result = await apiPost<{ valid: boolean; error?: string; entities?: number }>(url, {});
+        setDotStatus(dot, result.valid ? "green" : "red");
+        showFishTestMessage(result.valid ? "Connected." : (result.error || "That didn't work."), dot);
+      } catch {
+        setDotStatus(dot, "red");
+        showFishTestMessage("Could not reach the JARVIS server to run the test.", dot);
+      }
+    });
+  }
 
   // Test Home Assistant (uses whatever is saved, so save first)
   document.getElementById("btn-test-ha")?.addEventListener("click", async () => {
