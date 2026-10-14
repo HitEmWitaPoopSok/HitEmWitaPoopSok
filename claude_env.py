@@ -27,7 +27,9 @@ import sys
 # Every ANTHROPIC_* variable, not just the key: the base URL and the model
 # override redirect a child just as effectively as credentials do.
 SCRUBBED_ENV_PREFIXES = ("CLAUDE_CODE_", "ANTHROPIC_")
-SCRUBBED_ENV_KEYS = {"CLAUDECODE"}
+# HOMEASSISTANT_TOKEN: no spawned run has any business holding the key to the
+# user's house; only the server's own `smart_home` tool uses it.
+SCRUBBED_ENV_KEYS = {"CLAUDECODE", "HOMEASSISTANT_TOKEN"}
 
 # asyncio.create_subprocess_exec gives a child's stdout/stderr StreamReader a
 # 64 KiB *line* buffer by default (asyncio.streams._DEFAULT_LIMIT). `claude -p

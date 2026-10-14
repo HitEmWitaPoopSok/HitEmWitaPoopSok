@@ -81,6 +81,7 @@ import session_watch
 import specs
 import stream_parser
 import usage_scan
+import self_fix
 import usage_store
 import web_auth
 from run_executor import RunExecutor
@@ -1907,6 +1908,10 @@ async def lifespan(application: FastAPI):
 
     await stop_session_watcher()
     await stop_brain_and_speech()
+    try:
+        await browser_agent.shutdown()
+    except Exception:
+        pass
 
 
 # The interactive OpenAPI console is a "Try it out" button on every route
@@ -2453,6 +2458,10 @@ TAINTING_TOOLS = {
 # inheriting "clean" by being forgotten — which is exactly how nine readers
 # came to be missing from the original set.
 TAINT_EXEMPT_TOOLS = {
+    "manage_window": (
+        "only its list and its 'which one?' answer carry other programs' "
+        "window titles, and the handler marks the turn itself in exactly "
+        "those cases; opening, closing and minimising read nothing"),
     "list_projects": (
         "it emits project names and directory paths off the session roster "
         "and no file content, no transcript text and no page — and it is how "
@@ -2484,6 +2493,17 @@ TAINT_EXEMPT_TOOLS = {
     "remember": "it writes a memory, it does not read",
     "project_note": "it writes a note, it does not read",
     "write_journal": "it writes the journal, it does not read",
+    "fix_yourself": (
+        "it starts a repair run on a COPY of the source, and nothing it "
+        "produces is applied without the user's click on the page; it does "
+        "not read"),
+    "smart_home": (
+        "its device names come from the user's own Home Assistant and are "
+        "still wrapped as untrusted; it changes lights, it does not carry "
+        "anything anywhere, and it refuses locks, alarms and cameras"),
+    "show_hud": (
+        "it only opens or closes the status display on the page, reads "
+        "nothing and carries nothing anywhere"),
 }
 
 # Acting tools that only ever bring back MORE content to read. They are gated
@@ -2648,6 +2668,15 @@ def _bearer_token_matches(header_value: str, expected: str) -> bool:
         return False
 
 
+async def _announce_activity(tool: str, state: str) -> None:
+    """Tell the page which tool JARVIS is using, for its activity strip. The
+    name only: never the arguments, never the result."""
+    try:
+        await _voice_emit({"type": "activity", "tool": tool, "state": state})
+    except Exception:
+        pass
+
+
 @app.post("/internal/tool")
 async def internal_tool(request: Request):
     """Loopback-only tool channel for the brain's MCP child.
@@ -2696,13 +2725,16 @@ async def internal_tool(request: Request):
                         "session" if tool in MEMORY_WRITERS else "turn")
             return _tool_reply(False, refusal)
 
+    await _announce_activity(tool, "start")
     try:
         result = handler(args)
         if inspect.isawaitable(result):
             result = await result
     except Exception as e:
         log.error(f"tool {tool} failed: {e}", exc_info=True)
+        await _announce_activity(tool, "done")
         return _tool_reply(False, f"That tool failed: {e}")
+    await _announce_activity(tool, "done")
     # The turn now holds whatever that tool brought back. Marked HERE, once,
     # rather than in each handler: a reader added later cannot forget, and
     # `TAINTING_TOOLS` is then the entire decision, in one readable place.
@@ -6195,8 +6227,204 @@ def tool_usage_status(args: dict) -> str:
 
 
 TOOL_HANDLERS["usage_status"] = tool_usage_status
+
+
+# --- the on-screen display, and repairing himself -------------------------
+
+async def tool_show_hud(args: dict) -> str:
+    """Open, close or toggle the status display on the page."""
+    action = str(args.get("action") or "open").strip().lower()
+    if action not in ("open", "close", "toggle"):
+        return "Open, close or toggle, sir — which?"
+    await _voice_emit({"type": "hud", "action": action})
+    if action == "open":
+        return "Display open, sir."
+    if action == "close":
+        return "Display closed, sir."
+    return "Done, sir."
+
+
+TOOL_HANDLERS["show_hud"] = tool_show_hud
+# UI only: it is not an acting tool, so "show me the display" works whoever
+# is talking, exactly like usage_status.
+
+
+async def tool_fix_yourself(args: dict) -> str:
+    """Start a repair of JARVIS's own code, on a copy. Never applies it."""
+    problem = str(args.get("problem") or "").strip()
+    try:
+        await self_fix.start(_spawn_fix_run, problem, dict(_problems),
+                             _jarvis_log_path())
+    except RuntimeError as e:
+        return f"{_plain_name(str(e), 'I cannot start that')}, sir."
+    try:
+        await _voice_emit({"type": "hud", "action": "open", "focus": "fix"})
+    except Exception:
+        pass
+    return ("A repair is under way on a copy of me, sir. It will take a few "
+            "minutes, and nothing changes until you read it and press apply "
+            "on my display.")
+
+
+TOOL_HANDLERS["fix_yourself"] = tool_fix_yourself
+ACTING_TOOLS.add("fix_yourself")
 # It reads a file and says what it found. "How much have I used" must not
 # depend on who is talking, so it is deliberately NOT an acting tool.
+
+
+# --- windows, the browser, and the house ----------------------------------
+#
+# Three tools that DO things at the user's desk and in his home. All three are
+# acting tools (only the user's own voice may use them), and each has a
+# short list of things it refuses on purpose; the refusals are spoken.
+
+import window_manager                                     # noqa: E402
+import browser_agent                                      # noqa: E402
+import home_assistant                                     # noqa: E402
+
+_WINDOWS_WRAP_NAME = "windows"
+_BROWSE_WRAP_NAME = "browser page"
+_HOME_WRAP_NAME = "home devices"
+
+
+def _window_rows(windows) -> str:
+    return "\n".join(
+        f"- {w.process}{' (front)' if w.front else ''}"
+        f"{' [' + w.state + ']' if w.state != 'normal' else ''}: {w.title or '(no title)'}"
+        for w in windows)
+
+
+async def tool_manage_window(args: dict) -> str:
+    """List, open, focus, minimise, maximise, restore or close windows."""
+    action = str(args.get("action") or "list").strip().lower()
+    target = str(args.get("target") or "").strip()[:80]
+    if action not in window_manager.ACTIONS:
+        return "I can list, open, focus, minimise, maximise, restore or close, sir."
+    try:
+        if action == "open":
+            if not target:
+                return "Open what, sir?"
+            name = await window_manager.open_app(target)
+            return f"Opening {name}, sir."
+        if action == "minimize_all":
+            await window_manager.show_desktop()
+            return "Desktop cleared, sir."
+        windows = await window_manager.list_windows()
+        if action == "list":
+            if not windows:
+                return "Nothing is open, sir."
+            _mark_the_turn_untrusted("browse")     # titles are other programs' words
+            return ("Your open windows, front first:\n"
+                    + _wrap_untrusted(_WINDOWS_WRAP_NAME, _window_rows(windows)))
+        if not target:
+            return "Which window, sir?"
+        hits = window_manager.match(windows, target)
+        if not hits:
+            return "I can't see a window like that, sir."
+        if len(hits) > 1:
+            # Several windows of one program is normal for "close the terminals".
+            # Acting on more than one is only allowed for minimise and close of
+            # the SAME program, never a guess across programs.
+            if len({w.process for w in hits}) > 1:
+                _mark_the_turn_untrusted("browse")
+                return ("More than one thing matches, sir — which?\n"
+                        + _wrap_untrusted(_WINDOWS_WRAP_NAME, _window_rows(hits[:8])))
+            if action in ("focus", "maximize", "restore"):
+                hits = hits[:1]
+            elif len(hits) > 5:
+                return f"That's {len(hits)} windows, sir — be more specific."
+        for w in hits:
+            await window_manager.act(w, action)
+        many = len(hits) > 1
+        if action == "focus":
+            return "Brought forward, sir."
+        if action == "minimize":
+            return f"Minimised {len(hits)} windows, sir." if many else "Minimised, sir."
+        if action == "maximize":
+            return "Maximised, sir."
+        if action == "restore":
+            return "Restored, sir."
+        return f"Closed {len(hits)} windows, sir." if many else "Closed, sir."
+    except window_manager.WindowError as e:
+        return f"{e}, sir."
+
+
+async def tool_browse(args: dict) -> str:
+    """Drive a real browser page: open, look, click, type, press, scroll, back, close."""
+    action = str(args.get("action") or "look").strip().lower()
+    ref = args.get("ref")
+    text = str(args.get("text") or "")
+    confirm = bool(args.get("confirmed"))
+    # A click that commits (buy, send, delete, pay…) is only ever done after the
+    # server has itself asked for confirmation on that very element.
+    pending = _browse_pending.get("ref")
+    if action == "click" and confirm and (pending is None or str(pending) != str(ref)):
+        confirm = False
+    try:
+        result = await asyncio.wait_for(browser_agent.perform(
+            action, url=str(args.get("url") or ""), ref=ref, text=text,
+            key=str(args.get("key") or ""), submit=bool(args.get("submit")),
+            direction=str(args.get("direction") or "down"), confirmed=confirm),
+            PAGE_DEADLINE_SEC * 2)
+    except asyncio.TimeoutError:
+        return "That took too long, sir — I've stopped."
+    except browser_agent.BrowseError as e:
+        return f"{e}, sir."
+    except Exception as e:
+        log.warning("browse %s failed: %s", action, e)
+        return "The browser wouldn't cooperate, sir."
+    if result.needs_confirm:
+        _browse_pending["ref"] = ref if ref is not None else _first_ref(result.page_text)
+        return ("That would commit something, sir. Ask the user aloud, in plain words, "
+                "whether to press it, and only if they say yes call click again with "
+                "confirmed true and the same number:\n"
+                + _wrap_untrusted(_BROWSE_WRAP_NAME, result.page_text))
+    _browse_pending.clear()
+    body = _wrap_untrusted(_BROWSE_WRAP_NAME, result.page_text) if result.page_text else ""
+    return f"{result.note}\n{body}".strip()
+
+
+_browse_pending: dict = {}
+
+
+def _first_ref(text: str):
+    m = re.match(r"\[(\d+)\]", text or "")
+    return int(m.group(1)) if m else None
+
+
+async def tool_smart_home(args: dict) -> str:
+    """Lights and smart devices, through Home Assistant."""
+    try:
+        reply = await home_assistant.execute(args)
+    except home_assistant.HAError as e:
+        return f"{e}, sir."
+    if reply.untrusted:
+        return f"{reply.text}\n{_wrap_untrusted(_HOME_WRAP_NAME, reply.untrusted)}"
+    return reply.text
+
+
+TOOL_HANDLERS.update({
+    "manage_window": tool_manage_window,
+    "browse": tool_browse,
+    "smart_home": tool_smart_home,
+})
+ACTING_TOOLS.update({"manage_window", "browse", "smart_home"})
+# Window titles and page text are other people's words (a document's name, a
+# web page), so those two taint the turn. Device names are the household's own
+# (see TAINT_EXEMPT_TOOLS), so "which lights are on? turn them off" works.
+TAINTING_TOOLS.update({
+    "browse": "a web page",
+})
+# `browse` reads-then-acts as one feature ("open that site and click Sign
+# up"), so a tainted turn does not shut it. What bounds it instead: it is a
+# fresh profile with no logins, never types into password or card fields, and
+# asks the user before anything that commits; and it opens no channel that
+# `read_page` and the CLI's own WebFetch do not already have.
+# `manage_window` is NOT in this set: it changes things, so it is shut after
+# the turn has read a page or window titles. Its handler taints the turn
+# itself, and only when it hands titles back (list / "which one?"). smart_home is NOT in this set: after reading a web
+# page JARVIS will not change the lights on its say-so.
+UNTRUSTED_READING_TOOLS.add("browse")
 
 
 # --- "what are you connected to?" ----------------------------------------
@@ -6785,6 +7013,7 @@ async def voice_handler(ws: WebSocket):
 # a restart.
 SETTABLE_ENV_KEYS = frozenset({
     "FISH_API_KEY", "FISH_VOICE_ID", "USER_NAME", "HONORIFIC",
+    "HOMEASSISTANT_URL", "HOMEASSISTANT_TOKEN",
 })
 
 # A value may not carry anything that ends the line it is written on.
@@ -6960,6 +7189,11 @@ async def api_test_fish(body: KeyTest):
     except Exception as e:
         return {"valid": False, "error": str(e)[:200]}
 
+@app.post("/api/settings/test-home-assistant")
+async def api_test_home_assistant():
+    """Try the saved address and token. Reports, never changes anything."""
+    return await home_assistant.check()
+
 @app.get("/api/settings/status")
 async def api_settings_status():
     import shutil as _shutil
@@ -6973,6 +7207,8 @@ async def api_settings_status():
         "env_keys_set": {
             "fish_audio": bool(env_dict.get("FISH_API_KEY", "").strip() and env_dict.get("FISH_API_KEY", "") != "your-fish-audio-api-key-here"),
             "fish_voice_id": bool(env_dict.get("FISH_VOICE_ID", "").strip()),
+            "home_assistant": bool(env_dict.get("HOMEASSISTANT_URL", "").strip()
+                                   and env_dict.get("HOMEASSISTANT_TOKEN", "").strip()),
             "user_name": env_dict.get("USER_NAME", ""),
         },
     }
@@ -7005,12 +7241,10 @@ async def api_save_preferences(body: PreferencesUpdate):
 # Control endpoints (restart)
 # ---------------------------------------------------------------------------
 
-@app.post("/api/restart")
-async def api_restart():
-    """Restart the JARVIS server."""
-    log.info("Restart requested — shutting down in 2 seconds")
+def _restart_server_soon(delay: float = 2.0) -> None:
+    """Restart the JARVIS server a moment from now."""
     async def _restart():
-        await asyncio.sleep(2)
+        await asyncio.sleep(delay)
         # Re-exec with the ARGUMENTS WE WERE GIVEN, not hardcoded defaults.
         # This used to force --host 0.0.0.0 --port 8340, so a server started
         # on ::1:8341 came back on a different origin — and Chrome scopes
@@ -7028,7 +7262,101 @@ async def api_restart():
             os._exit(0)
         os.execv(sys.executable, [sys.executable, __file__, *sys.argv[1:]])
     asyncio.create_task(_restart())
+
+
+@app.post("/api/restart")
+async def api_restart():
+    """Restart the JARVIS server."""
+    log.info("Restart requested — shutting down in 2 seconds")
+    _restart_server_soon()
     return {"status": "restarting"}
+
+
+# ---------------------------------------------------------------------------
+# Fix Yourself — see self_fix.py for the whole design.
+#
+# Starting one is a recorded Claude Code run on a COPY of the source. Applying
+# or undoing one changes the installed files, so those two only answer a
+# request that carries an Origin header: that is what a click on the page
+# sends, and what a bare script holding the tool token does not.
+# ---------------------------------------------------------------------------
+
+FIX_RUN_TIMEOUT_SEC = 900
+
+
+def _jarvis_log_path() -> Optional[Path]:
+    pid_file = os.environ.get("JARVIS_PID_FILE", "").strip()
+    if not pid_file:
+        return None
+    path = Path(pid_file).parent / "jarvis.log"
+    return path if path.exists() else None
+
+
+async def _spawn_fix_run(prompt: str, name: str, path: str, origin: str) -> str:
+    return await run_executor_instance.spawn(
+        prompt, name, path, origin, timeout_sec=FIX_RUN_TIMEOUT_SEC)
+
+
+class FixRequest(BaseModel):
+    problem: str = ""
+
+
+@app.get("/api/fix-yourself")
+async def api_fix_status():
+    return await asyncio.to_thread(self_fix.status, run_store.get_run)
+
+
+@app.post("/api/fix-yourself")
+async def api_fix_start(body: FixRequest):
+    try:
+        state = await self_fix.start(_spawn_fix_run, body.problem, dict(_problems),
+                                     _jarvis_log_path())
+    except RuntimeError as e:
+        return JSONResponse(status_code=409, content={"error": str(e)})
+    return state
+
+
+def _fix_needs_a_click(request: Request) -> Optional[JSONResponse]:
+    if not request.headers.get("origin"):
+        return JSONResponse(status_code=403, content={
+            "error": "a repair is only applied or undone from the page itself"})
+    return None
+
+
+@app.post("/api/fix-yourself/apply")
+async def api_fix_apply(request: Request):
+    refused = _fix_needs_a_click(request)
+    if refused:
+        return refused
+    try:
+        state = await asyncio.to_thread(self_fix.apply)
+    except RuntimeError as e:
+        return JSONResponse(status_code=409, content={"error": str(e)})
+    log.warning("fix-yourself: applied %s; restarting", state.get("applied_files"))
+    _restart_server_soon()
+    return {**state, "restarting": True}
+
+
+@app.post("/api/fix-yourself/revert")
+async def api_fix_revert(request: Request):
+    refused = _fix_needs_a_click(request)
+    if refused:
+        return refused
+    try:
+        state = await asyncio.to_thread(self_fix.revert)
+    except RuntimeError as e:
+        return JSONResponse(status_code=409, content={"error": str(e)})
+    log.warning("fix-yourself: reverted; restarting")
+    _restart_server_soon()
+    return {**state, "restarting": True}
+
+
+@app.post("/api/fix-yourself/discard")
+async def api_fix_discard():
+    try:
+        return await asyncio.to_thread(self_fix.discard)
+    except RuntimeError as e:
+        return JSONResponse(status_code=409, content={"error": str(e)})
 
 
 # ---------------------------------------------------------------------------

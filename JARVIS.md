@@ -339,6 +339,10 @@ invariants hold throughout it:
 | `stream_parser.py` | Pure parsing of Claude Code's stream-json output (no I/O) |
 | `session_watch.py` | Watches every Claude Code session on the machine |
 | `session_steer.py` | Posts a message into a running session's inbox socket |
+| `self_fix.py` | Fix Yourself: repair on a copy, reviewed and applied by click |
+| `window_manager.py` | Windows: list, open, focus, minimise, maximise, close |
+| `browser_agent.py` | A browser JARVIS drives himself (click, type, scroll) |
+| `home_assistant.py` | Lights and smart devices through Home Assistant |
 | `dialog.py` | The closed key vocabulary for `answer_dialog` (nothing is pressed on Windows) |
 | `jarvis_memory.py` | Memory as a folder of Markdown files, not a database |
 | `jarvis_home/CLAUDE.md` | JARVIS's persona and rules — the file to edit to change who he is |

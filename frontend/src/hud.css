@@ -1,0 +1,199 @@
+/* The JARVIS HUD: a small reactor in the lower-left corner that opens into a
+   panel of what is running, what needs the user, their usage, and the state of
+   his voice and brain. Colours match the orb (sky blue on near-black). */
+
+#hud {
+  position: fixed;
+  left: 22px;
+  bottom: 40px;
+  z-index: 30;
+  font: 12px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #bfe7ff;
+  user-select: none;
+}
+
+#hud-orb {
+  display: block;
+  width: 112px;
+  height: 112px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.25s ease, filter 0.25s ease;
+  filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.25));
+}
+#hud-orb:hover,
+#hud-orb:focus-visible {
+  transform: scale(1.07);
+  filter: drop-shadow(0 0 16px rgba(56, 189, 248, 0.55));
+}
+#hud.open #hud-orb {
+  filter: drop-shadow(0 0 18px rgba(56, 189, 248, 0.6));
+}
+
+#hud-panel {
+  position: absolute;
+  left: 0;
+  bottom: 124px;
+  width: 348px;
+  max-height: calc(100vh - 280px);
+  overflow-y: auto;
+  padding: 14px 16px 16px;
+  background: rgba(5, 12, 22, 0.88);
+  border: 1px solid rgba(56, 189, 248, 0.38);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 0 30px rgba(14, 165, 233, 0.12), inset 0 0 40px rgba(14, 165, 233, 0.04);
+  /* cut corners */
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+  opacity: 0;
+  transform: translateY(10px) scale(0.97);
+  transform-origin: bottom left;
+  pointer-events: none;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(56, 189, 248, 0.4) transparent;
+  user-select: text;
+}
+#hud.open #hud-panel {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.hud-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  letter-spacing: 3px;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: rgba(125, 211, 252, 0.95);
+}
+.hud-x {
+  background: none;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #7dd3fc;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  line-height: 1;
+}
+.hud-x:hover { background: rgba(56, 189, 248, 0.14); }
+
+.hud-sec { margin-top: 12px; }
+.hud-label {
+  font-size: 10px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: rgba(125, 211, 252, 0.55);
+  margin-bottom: 5px;
+  display: flex;
+  justify-content: space-between;
+}
+.hud-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+  word-break: break-word;
+}
+.hud-row .grow { flex: 1; }
+.hud-lbl { min-width: 78px; }
+.hud-dim { color: rgba(191, 231, 255, 0.55); }
+.hud-mono { font-family: Consolas, "Cascadia Mono", monospace; font-size: 11px; }
+
+.hud-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #475569;
+  align-self: center;
+  box-shadow: 0 0 6px currentColor;
+  color: #475569;
+}
+.hud-dot.ok { background: #34d399; color: #34d399; }
+.hud-dot.warn { background: #fbbf24; color: #fbbf24; }
+.hud-dot.bad { background: #f87171; color: #f87171; animation: hud-pulse 1.1s ease-in-out infinite; }
+
+.hud-gauge {
+  height: 5px;
+  background: rgba(56, 189, 248, 0.14);
+  margin: 3px 0 5px;
+}
+.hud-gauge > i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #0ea5e9, #67e8f9);
+  box-shadow: 0 0 8px rgba(103, 232, 249, 0.6);
+}
+.hud-gauge > i.hot { background: linear-gradient(90deg, #f59e0b, #f87171); }
+
+.hud-need { color: #fca5a5; }
+
+.hud-fix {
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 9px 10px;
+  background: rgba(14, 165, 233, 0.05);
+}
+.hud-fix.flash { animation: hud-flash 1.4s ease-out 1; }
+.hud-fix textarea {
+  width: 100%;
+  min-height: 48px;
+  resize: vertical;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  color: #e0f2fe;
+  padding: 6px 8px;
+  font: inherit;
+  margin-bottom: 7px;
+}
+.hud-btn {
+  background: rgba(14, 165, 233, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  color: #7dd3fc;
+  padding: 5px 11px;
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: 1px;
+  margin-right: 6px;
+}
+.hud-btn:hover { background: rgba(14, 165, 233, 0.26); }
+.hud-btn.primary { border-color: #fbbf24; color: #fde68a; background: rgba(251, 191, 36, 0.1); }
+.hud-btn.primary:hover { background: rgba(251, 191, 36, 0.22); }
+.hud-btn[disabled] { opacity: 0.45; cursor: default; }
+
+.hud-fix details { margin-top: 7px; }
+.hud-fix summary { cursor: pointer; color: #7dd3fc; }
+.hud-fix pre {
+  max-height: 180px;
+  overflow: auto;
+  margin-top: 5px;
+  padding: 6px;
+  background: rgba(0, 0, 0, 0.45);
+  font: 10.5px/1.4 Consolas, "Cascadia Mono", monospace;
+  white-space: pre;
+  color: #cbd5e1;
+}
+.hud-fix .added { color: #86efac; }
+
+@keyframes hud-pulse { 50% { opacity: 0.35; } }
+@keyframes hud-flash {
+  0% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.9); }
+  100% { box-shadow: 0 0 0 14px rgba(251, 191, 36, 0); }
+}
+
+@media (max-width: 520px) {
+  #hud-panel { width: calc(100vw - 44px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #hud-panel, #hud-orb { transition: none; }
+  .hud-dot.bad { animation: none; }
+}

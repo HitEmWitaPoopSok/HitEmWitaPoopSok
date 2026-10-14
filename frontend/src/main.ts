@@ -9,6 +9,7 @@ import { createOrb, type OrbState } from "./orb";
 import { createVoiceInput, createAudioPlayer, createMicMonitor } from "./voice";
 import { createSocket } from "./ws";
 import { openSettings, checkFirstTimeSetup } from "./settings";
+import { createHud } from "./hud";
 import "./style.css";
 
 // ---------------------------------------------------------------------------
@@ -213,6 +214,17 @@ audioPlayer.onNeedsGesture(() => {
 });
 
 // ---------------------------------------------------------------------------
+// The HUD: a small reactor in the lower-left corner that opens into a panel.
+// ---------------------------------------------------------------------------
+
+const hud = createHud({
+  getState: () => currentState,
+  isMuted: () => isMuted,
+  getProblems: () => problems,
+  openSettings: () => openSettings(),
+});
+
+// ---------------------------------------------------------------------------
 // WebSocket messages
 // ---------------------------------------------------------------------------
 
@@ -243,6 +255,13 @@ socket.onMessage((msg) => {
     // A chunk TTS could not voice: show it instead of losing it
     console.log("[JARVIS]", msg.text);
     statusEl.textContent = String(msg.text);
+  } else if (type === "hud") {
+    const action = String(msg.action ?? "open");
+    if (action === "close") hud.close();
+    else if (action === "toggle") hud.toggle();
+    else hud.open(msg.focus ? String(msg.focus) : undefined);
+  } else if (type === "activity") {
+    hud.noteActivity(String(msg.tool ?? ""), String(msg.state ?? "done"));
   } else if (type === "problem") {
     setProblem(String(msg.source ?? "server"), String(msg.text ?? ""));
   } else if (type === "notice") {
@@ -327,9 +346,9 @@ btnRestart.addEventListener("click", async (e) => {
 btnFixSelf.addEventListener("click", (e) => {
   e.stopPropagation();
   menuDropdown.style.display = "none";
-  // Activate work mode on the WebSocket session (JARVIS becomes Claude Code's voice)
-  // Milestone 1 has no tools yet; "Fix yourself" returns as a brain tool later.
-  statusEl.textContent = "fix-yourself is not available in this build";
+  // Opens the display on its Fix-yourself card: describe the problem, he
+  // repairs a COPY of himself, and nothing changes until you press apply.
+  hud.open("fix");
 });
 
 // Settings button

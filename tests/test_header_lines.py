@@ -384,6 +384,24 @@ PRINTERS = _functions_that_print_a_foreign_field()
 # to-do: every one of them is a place where a session's own words DO reach a
 # string, and the argument is why that string is safe.
 EXEMPT = {
+    "browser_agent.describe": (
+        "it prints a web page's own text, and its only consumer is "
+        "`tool_browse`, which puts the whole result inside one untrusted "
+        "block (`_BROWSE_WRAP_NAME`) before the brain sees it"),
+    "home_assistant._summary": (
+        "it prints device names the household chose; `tool_smart_home` wraps "
+        "everything it returns in an untrusted block"),
+    "home_assistant.execute": (
+        "it builds the device list and spoken sentence; the names go in "
+        "`Reply.untrusted`, which the caller wraps, and never into `Reply.text`"),
+    "server._window_rows": (
+        "it prints window titles, which are other programs' words; both "
+        "callers (`tool_manage_window`) put the rows inside an untrusted block"),
+    "self_fix.status": (
+        "it returns JSON for the on-screen panel: a summary a repair run "
+        "wrote and a diff of files, which the page shows with `textContent`. "
+        "None of it is ever spoken or put in the brain's context, so there is "
+        "no channel for it to steer"),
     "server.explain_tts_failure": (
         "its `detail` is Fish Audio's own HTTP error text, and it goes only "
         "into the on-screen problem banner (`_set_problem`, which the page "

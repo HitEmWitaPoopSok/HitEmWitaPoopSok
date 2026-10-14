@@ -126,6 +126,21 @@ arbitrary LLM and file content, so everything goes through
 - `screen.py` — Seeing the desktop itself: the window list and one
   downscaled screenshot (both PowerShell) the brain sees as an MCP image block. Captured
   only on a turn the user drove, never persisted, never on a timer
+- `self_fix.py` — "Fix Yourself": a repair run on a COPY of JARVIS's Python
+  source; the user reads the diff on the HUD and applies it by click, with a
+  backup and an undo. Python-side only, allow-listed paths
+- `window_manager.py` — `manage_window`: list / open / focus / minimise /
+  maximise / restore / close windows (PowerShell, fixed scripts, inputs by
+  environment variable); apps open from a fixed list plus the user's `apps.json`
+- `browser_agent.py` — `browse`: a Playwright browser JARVIS opens itself
+  (fresh profile, no logins) that he can click and type in. It cannot touch
+  the user's own Chrome or desktop apps. Never types into password or card
+  fields; a click that commits needs a server-side confirmation first
+- `home_assistant.py` — `smart_home`: lights and devices through Home
+  Assistant's REST API (`HOMEASSISTANT_URL` / `HOMEASSISTANT_TOKEN`). Never
+  operates locks, alarms, cameras, garage doors or scripts
+- `frontend/src/hud.ts` — The HUD: a reactor-and-moons orb that expands into a
+  status panel and the Fix Yourself review
 - `repo_read.py` — Cheap, model-free reading of a repository (no `claude`
   subprocess)
 - `project_maker.py` — Creates a new project directory from a spoken name,

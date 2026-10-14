@@ -16,6 +16,7 @@ interface StatusResponse {
   env_keys_set: {
     fish_audio: boolean;
     fish_voice_id: boolean;
+    home_assistant: boolean;
     user_name: string;
   };
 }
@@ -89,6 +90,22 @@ function buildPanelHTML(): string {
             <div class="settings-input-row">
               <input type="text" id="input-fish-voice-id" placeholder="612b878b113047d9a770c069c8b4fdfe" />
               <button class="settings-btn" id="btn-save-voice-id">Save</button>
+            </div>
+          </div>
+
+          <div class="settings-field">
+            <label>Home Assistant address (optional, for lights and smart devices)</label>
+            <div class="settings-input-row">
+              <input type="text" id="input-ha-url" placeholder="http://homeassistant.local:8123" />
+            </div>
+          </div>
+
+          <div class="settings-field">
+            <label>Home Assistant long-lived token</label>
+            <div class="settings-input-row">
+              <input type="password" id="input-ha-token" placeholder="Profile page, bottom: Long-lived access tokens" />
+              <button class="settings-btn" id="btn-test-ha">Test</button>
+              <span class="status-dot" id="status-ha"></span>
             </div>
           </div>
 
@@ -190,6 +207,7 @@ async function loadStatus() {
 
     // API key status dots
     setDotStatus("status-fish", status.env_keys_set.fish_audio ? "green" : "red");
+    setDotStatus("status-ha", status.env_keys_set.home_assistant ? "green" : "off");
 
     // System info
     const portEl = document.getElementById("sysinfo-port");
@@ -243,6 +261,16 @@ function wireEvents() {
       await apiPost("/api/settings/keys", { key_name: "FISH_API_KEY", key_value: fishKey });
       savedAny = true;
     }
+    const haUrl = (document.getElementById("input-ha-url") as HTMLInputElement).value.trim();
+    const haToken = (document.getElementById("input-ha-token") as HTMLInputElement).value.trim();
+    if (haUrl) {
+      await apiPost("/api/settings/keys", { key_name: "HOMEASSISTANT_URL", key_value: haUrl });
+      savedAny = true;
+    }
+    if (haToken) {
+      await apiPost("/api/settings/keys", { key_name: "HOMEASSISTANT_TOKEN", key_value: haToken });
+      savedAny = true;
+    }
     await loadStatus();
 
     const notice = document.getElementById("keys-restart-notice");
@@ -254,6 +282,22 @@ function wireEvents() {
     const voiceId = (document.getElementById("input-fish-voice-id") as HTMLInputElement).value.trim();
     if (voiceId) {
       await apiPost("/api/settings/keys", { key_name: "FISH_VOICE_ID", key_value: voiceId });
+    }
+  });
+
+  // Test Home Assistant (uses whatever is saved, so save first)
+  document.getElementById("btn-test-ha")?.addEventListener("click", async () => {
+    setDotStatus("status-ha", "yellow");
+    try {
+      const result = await apiPost<{ valid: boolean; error?: string; entities?: number }>(
+        "/api/settings/test-home-assistant", {});
+      setDotStatus("status-ha", result.valid ? "green" : "red");
+      showFishTestMessage(result.valid
+        ? `Connected: ${result.entities ?? 0} devices and sensors.`
+        : (result.error || "Home Assistant refused the request."), "status-ha");
+    } catch {
+      setDotStatus("status-ha", "red");
+      showFishTestMessage("Could not reach the JARVIS server to run the test.", "status-ha");
     }
   });
 
@@ -284,13 +328,14 @@ function wireEvents() {
 }
 
 /** Say WHY the Fish test failed, beside the dot, instead of only colouring it. */
-function showFishTestMessage(text: string) {
-  const dot = document.getElementById("status-fish");
+function showFishTestMessage(text: string, dotId = "status-fish") {
+  const dot = document.getElementById(dotId);
   if (!dot || !dot.parentElement) return;
-  let msg = document.getElementById("fish-test-msg");
+  const msgId = dotId === "status-fish" ? "fish-test-msg" : `${dotId}-msg`;
+  let msg = document.getElementById(msgId);
   if (!msg) {
     msg = document.createElement("div");
-    msg.id = "fish-test-msg";
+    msg.id = msgId;
     msg.style.cssText = "font-size:12px;opacity:0.85;margin-top:6px;word-break:break-word;";
     dot.parentElement.insertAdjacentElement("afterend", msg);
   }

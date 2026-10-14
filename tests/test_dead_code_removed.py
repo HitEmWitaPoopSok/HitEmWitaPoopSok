@@ -397,7 +397,7 @@ def test_restart_does_not_hardcode_host_and_port():
     port, so the user silently lost their mic."""
     import server
     source = pathlib.Path(server.__file__).read_text()
-    i = source.index("async def api_restart")
-    body = source[i:i + 1200]
+    i = source.index("def _restart_server_soon")
+    body = source[i:i + 1800]
     assert "sys.argv" in body, "restart must re-exec with the real arguments"
     assert '"0.0.0.0"' not in body and '"8340"' not in body

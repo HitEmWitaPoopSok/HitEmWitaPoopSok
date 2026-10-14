@@ -30,6 +30,16 @@ screenshot handling use `cmd.exe` and PowerShell.
 Your data (database, memory notes, `.env`, `jarvis.log`) lives in
 `%APPDATA%\JARVIS` and survives upgrades and uninstalls.
 
+## Things JARVIS can do at your desk and in your home
+
+| Say | What happens |
+|---|---|
+| "Open the HUD" / "show systems" | The small reactor orb in the lower-left corner expands (or click it) |
+| "Fix yourself" (or the button in settings / HUD) | A repair runs on a *copy* of JARVIS's code. You read the change on the HUD and press **Apply**; it keeps a backup and has **Undo**. Python code only |
+| "Open Notepad", "minimise Chrome", "close the terminal", "show the desktop" | Window control. Add your own apps in `%APPDATA%\JARVIS\apps.json`, e.g. `{"spotify": "C:\\Users\\you\\AppData\\Roaming\\Spotify\\Spotify.exe"}` |
+| "Go to example.com and click Sign up" | A browser JARVIS opens himself (fresh profile, no saved logins). It can click and type on web pages. It cannot control your own Chrome or other desktop apps. It never types into password or card fields and asks you before anything that buys, sends or deletes |
+| "Turn off the kitchen lights", "set the bedroom to 30%", "is it warm in the hall?" | Home Assistant. In JARVIS's settings enter your Home Assistant address and a long-lived token (HA profile page, bottom). He will not operate locks, alarms, cameras or garage doors |
+
 ## What is not available on Windows
 
 | Feature | Windows |

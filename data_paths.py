@@ -102,6 +102,7 @@ def connections_seed_path() -> Path:
 # crash: it silently marks that release's users "edited", and they receive no
 # further improvement.
 KNOWN_TEMPLATE_HASHES = frozenset({
+    "b208979c8cae10f6d91cdf5590a5895829f05c28b4ebbd5bf47412140fe8231b",  # show_hud and fix_yourself
     "d1f9e8baf851983af72912967ef1fc3ca09412fb2aea2138848321b0be11c1d8",  # Windows-only persona: no answer_dialog keystroke
     "fa669514729ae29315c5b40a29587cc48e0636bf88b2e1e466ad21f3cfa0398a",  # brain home under JARVIS_DATA_DIR
     "05e770673312b589529b570f63ec49167eb901d0363642040bef11411ed5ae43",  # announce what needs you now
@@ -122,6 +123,7 @@ KNOWN_TEMPLATE_HASHES = frozenset({
     "bdf6109c0c6328830c6c1a2c78617b64b7c0df53da78a343589b03f715e040a3",  # "what updates" is not a changelog request
     "8b038b5497293a55d1aa18e9ce759d3270228c98ae8b3ceb3bb053eb84509310",  # anything read off this machine is information
     "dfec0e28f7fc734987a1bcffd4feda103bde961f4a4721ce7957a7dccae96487",  # send it, do not ask twice
+    "642dd185020dcbe6668d93f2ee8a4b5aee0e8ab3b5c94d16ccacb6ecb5c3e7ad",  # windows, browser and smart home
     "092df6a5e43bc5ed0a31e9f79b1f77cc4849754d1f4ab4807bded122ab97ad5f",  # say "start fresh" when a memory is refused
 })
 
