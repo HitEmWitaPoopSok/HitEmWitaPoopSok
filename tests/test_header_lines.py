@@ -384,6 +384,11 @@ PRINTERS = _functions_that_print_a_foreign_field()
 # to-do: every one of them is a place where a session's own words DO reach a
 # string, and the argument is why that string is safe.
 EXEMPT = {
+    "server.explain_tts_failure": (
+        "its `detail` is Fish Audio's own HTTP error text, and it goes only "
+        "into the on-screen problem banner (`_set_problem`, which the page "
+        "renders with `textContent`). It is never spoken and never enters the "
+        "brain's context, so there is no tool channel for it to steer"),
     "server._session_line": (
         "it prints `summary()` — another session's own words — with no "
         "escaping at all, and that is correct only because every caller puts "

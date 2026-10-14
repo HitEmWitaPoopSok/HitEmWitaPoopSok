@@ -332,3 +332,71 @@ def test_a_fish_key_saved_while_running_is_used_without_a_restart(monkeypatch):
     assert server._fish_credentials() == ("sk-fish-new", "voice-xyz")
     monkeypatch.setenv("FISH_VOICE_ID", "")
     assert server._fish_credentials()[1] == server.FISH_VOICE_ID
+
+
+# ── telling the user what is wrong ─────────────────────────────────────────
+
+@pytest.mark.parametrize("failure,expected", [
+    ({"kind": "no_key"}, "no Fish Audio key"),
+    ({"kind": "http", "status": 401, "detail": ""}, "rejected my API key"),
+    ({"kind": "http", "status": 402, "detail": ""}, "no credit"),
+    ({"kind": "http", "status": 404, "detail": "no such model"}, "Voice ID"),
+    ({"kind": "http", "status": 429, "detail": ""}, "too many requests"),
+    ({"kind": "http", "status": 500, "detail": "oops"}, "500"),
+    ({"kind": "network", "detail": "getaddrinfo failed"}, "can't reach Fish Audio"),
+    (None, "unknown reason"),
+])
+def test_every_speech_failure_is_explained_in_words(failure, expected):
+    import server
+    assert expected in server.explain_tts_failure(failure, "abc123")
+
+
+@pytest.mark.asyncio
+async def test_a_failed_synthesis_puts_the_reason_on_screen_and_a_good_one_clears_it(monkeypatch):
+    import server, tts
+    sent = []
+
+    async def emit(msg):
+        sent.append(msg)
+
+    monkeypatch.setattr(server, "_voice_emit", emit)
+    server._problems.clear()
+
+    async def failing(text, **kw):
+        tts.last_failure = {"kind": "http", "status": 402, "detail": ""}
+        return None
+
+    monkeypatch.setattr(tts, "synthesize_chunk", failing)
+    assert await server._synth_for_speech("Good evening, sir.") is None
+    assert "no credit" in server._problems["voice"]
+    assert sent[-1]["type"] == "problem" and sent[-1]["source"] == "voice"
+
+    sent.clear()
+    assert await server._synth_for_speech("Good evening, sir.") is None   # same failure: no repeat
+    assert sent == []
+
+    async def working(text, **kw):
+        tts.last_failure = None
+        return tts.SynthResult(b"mp3", 0.1, 0.2)
+
+    monkeypatch.setattr(tts, "synthesize_chunk", working)
+    assert await server._synth_for_speech("Good evening, sir.") == b"mp3"
+    assert "voice" not in server._problems
+    assert sent[-1] == {"type": "problem", "source": "voice", "text": ""}
+
+
+@pytest.mark.asyncio
+async def test_a_dead_brain_is_reported_with_its_reason(monkeypatch):
+    import server
+    sent = []
+
+    async def emit(msg):
+        sent.append(msg)
+
+    monkeypatch.setattr(server, "_voice_emit", emit)
+    monkeypatch.setattr(server, "speech", None)
+    server._problems.clear()
+    await server._on_brain_state("failed", {"reason": "claude: command not found"})
+    assert "command not found" in server._problems["brain"]
+    await server._on_brain_state("ready", {})
+    assert "brain" not in server._problems

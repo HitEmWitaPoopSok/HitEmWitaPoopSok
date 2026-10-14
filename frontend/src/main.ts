@@ -22,6 +22,54 @@ let isMuted = false;
 const statusEl = document.getElementById("status-text")!;
 const errorEl = document.getElementById("error-text")!;
 
+// ---------------------------------------------------------------------------
+// Standing problems
+//
+// A banner that stays until the cause is fixed, for the things that make
+// JARVIS silent or deaf: Fish Audio refusing the key, Claude Code not
+// running, the browser blocking the microphone. A line in a log file is not
+// an explanation anyone sees.
+// ---------------------------------------------------------------------------
+
+const problems = new Map<string, string>();
+const problemEl = document.createElement("div");
+problemEl.id = "problem-banner";
+problemEl.setAttribute("role", "alert");
+problemEl.style.cssText =
+  "position:fixed;top:0;left:0;right:0;z-index:9999;display:none;" +
+  "background:#4a1212;color:#ffdede;border-bottom:1px solid #b33;" +
+  "padding:10px 16px;font:14px/1.45 system-ui,sans-serif;";
+document.body.appendChild(problemEl);
+
+function renderProblems() {
+  problemEl.replaceChildren();
+  for (const [source, text] of problems) {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:12px;align-items:baseline;margin:2px 0;";
+    const label = document.createElement("strong");
+    label.textContent = ({ voice: "Voice", brain: "Brain", mic: "Microphone" } as Record<string, string>)[source] ?? source;
+    const body = document.createElement("span");
+    body.textContent = text;
+    row.append(label, body);
+    if (source === "voice") {
+      const open = document.createElement("button");
+      open.textContent = "Open settings";
+      open.style.cssText = "margin-left:auto;cursor:pointer;";
+      open.addEventListener("click", () => openSettings());
+      row.append(open);
+    }
+    problemEl.append(row);
+  }
+  problemEl.style.display = problems.size ? "block" : "none";
+}
+
+function setProblem(source: string, text: string) {
+  if (text) problems.set(source, text);
+  else problems.delete(source);
+  renderProblems();
+  if (text) console.warn(`[problem:${source}]`, text);
+}
+
 function showError(msg: string) {
   errorEl.textContent = msg;
   errorEl.style.opacity = "1";
@@ -89,8 +137,13 @@ const voiceInput = createVoiceInput(
   },
   (msg: string) => {
     showError(msg);
+    // The ones that mean "he cannot hear you" stay on screen.
+    if (/^(Microphone blocked|Another app has taken|Speech recognition not supported|Speech recognition error)/.test(msg)) {
+      setProblem("mic", msg);
+    }
   },
   (event: string) => {
+    if (event === "audio attached") setProblem("mic", "");
     // Mirror the recogniser's lifecycle to the server log. Going deaf is a
     // browser-side failure the server cannot otherwise see at all, and the
     // console it used to be confined to is never open when it happens.
@@ -190,6 +243,8 @@ socket.onMessage((msg) => {
     // A chunk TTS could not voice: show it instead of losing it
     console.log("[JARVIS]", msg.text);
     statusEl.textContent = String(msg.text);
+  } else if (type === "problem") {
+    setProblem(String(msg.source ?? "server"), String(msg.text ?? ""));
   } else if (type === "notice") {
     // Shown, never spoken. The server sends one when it is about to be busy
     // for a few seconds (a context rotation), and an empty string to clear it.

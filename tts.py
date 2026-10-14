@@ -18,6 +18,14 @@ log = logging.getLogger("jarvis.tts")
 FISH_TTS_URL = "https://api.fish.audio/v1/tts"
 
 
+# Why the most recent call failed, or None if it succeeded. The caller turns
+# this into a sentence the user can read; the old `return None` said nothing.
+#   {"kind": "no_key"}                       no API key at all
+#   {"kind": "http", "status": 402, "detail": "..."}   Fish Audio refused it
+#   {"kind": "network", "detail": "..."}     could not reach Fish Audio
+last_failure: Optional[dict] = None
+
+
 @dataclass
 class SynthResult:
     audio: bytes
@@ -28,8 +36,12 @@ class SynthResult:
 async def synthesize_chunk(text: str, *, api_key: str, voice_id: str,
                            client: Optional[httpx.AsyncClient] = None,
                            latency: str = "balanced", timeout: float = 15.0) -> Optional[SynthResult]:
+    global last_failure
     text = (text or "").strip()
-    if not text or not api_key:
+    if not text:
+        return None
+    if not api_key:
+        last_failure = {"kind": "no_key"}
         return None
     own = client is None
     client = client or httpx.AsyncClient(timeout=timeout)
@@ -46,6 +58,7 @@ async def synthesize_chunk(text: str, *, api_key: str, voice_id: str,
             if resp.status_code != 200:
                 detail = (await resp.aread())[:200].decode("utf-8", "replace")
                 log.error(f"TTS {resp.status_code} for {text[:40]!r}: {detail}")
+                last_failure = {"kind": "http", "status": resp.status_code, "detail": detail}
                 return None
             async for part in resp.aiter_bytes():
                 if first is None:
@@ -53,6 +66,7 @@ async def synthesize_chunk(text: str, *, api_key: str, voice_id: str,
                 buf.extend(part)
     except (httpx.HTTPError, OSError) as e:
         log.error(f"TTS error: {e}")
+        last_failure = {"kind": "network", "detail": str(e) or type(e).__name__}
         return None
     finally:
         if own:
@@ -61,5 +75,7 @@ async def synthesize_chunk(text: str, *, api_key: str, voice_id: str,
             except Exception as e:      # never turn a clean None into an exception
                 log.debug(f"TTS client close failed: {e}")
     if not buf:
+        last_failure = {"kind": "http", "status": 200, "detail": "Fish Audio sent no audio"}
         return None
+    last_failure = None
     return SynthResult(bytes(buf), first if first is not None else 0.0, time.monotonic() - t0)

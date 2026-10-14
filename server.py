@@ -112,7 +112,7 @@ def _fish_credentials() -> tuple[str, str]:
     frozen at import meant JARVIS stayed silent until a restart nobody knew
     to do.
     """
-    key = os.environ.get("FISH_API_KEY", FISH_API_KEY).strip()
+    key = os.environ.get("FISH_API_KEY", "").strip()
     voice = (os.environ.get("FISH_VOICE_ID", "").strip() or FISH_VOICE_ID)
     return key, voice
 FISH_API_URL = "https://api.fish.audio/v1/tts"
@@ -629,11 +629,65 @@ async def _voice_emit(msg: dict) -> None:
         raise NoVoiceClient("no voice client connected")
 
 
+# Standing problems the user must be able to SEE: {source: sentence}. A page
+# shows each as a banner until the server clears it (empty text). JARVIS going
+# quiet with the reason only in a log file nobody opens is the failure this
+# exists to end.
+_problems: dict[str, str] = {}
+
+
+async def _set_problem(source: str, text: str) -> None:
+    """Show (or, with "", clear) a standing problem on every connected page."""
+    if _problems.get(source, "") == text:
+        return
+    if text:
+        _problems[source] = text
+    else:
+        _problems.pop(source, None)
+    try:
+        await _voice_emit({"type": "problem", "source": source, "text": text})
+    except Exception:
+        pass            # nobody is connected; they get it when they connect
+
+
+def explain_tts_failure(failure: Optional[dict], voice_id: str = "") -> str:
+    """The reason speech failed, as a sentence for the person who can fix it."""
+    kind = (failure or {}).get("kind")
+    if kind == "no_key":
+        return ("I have no Fish Audio key, so I can't speak. "
+                "Open Settings, paste the key and press Save Keys.")
+    if kind == "network":
+        return (f"I can't reach Fish Audio ({failure.get('detail', 'no detail')}). "
+                "Check the internet connection, VPN or firewall.")
+    if kind == "http":
+        status = failure.get("status")
+        detail = str(failure.get("detail") or "").strip()[:120]
+        if status == 401:
+            return ("Fish Audio rejected my API key (401). Create a new key at "
+                    "fish.audio and paste it into Settings.")
+        if status == 402:
+            return ("Fish Audio says the account has no credit (402). Add credit "
+                    "at fish.audio, then speak to me again.")
+        if status in (400, 404, 422):
+            return (f"Fish Audio refused the voice ID {voice_id or '(default)'} "
+                    f"({status}). Open Settings and choose another Voice ID."
+                    + (f" It said: {detail}" if detail else ""))
+        if status == 429:
+            return "Fish Audio says I'm sending too many requests (429). Give it a minute."
+        return (f"Fish Audio returned an error ({status})"
+                + (f": {detail}" if detail else "") + ".")
+    return "Speech synthesis failed for an unknown reason. Check the server log."
+
+
 async def _synth_for_speech(text: str) -> Optional[bytes]:
     api_key, voice_id = _fish_credentials()
+    tts.last_failure = None
     r = await tts.synthesize_chunk(text, api_key=api_key, voice_id=voice_id, client=_tts_client)
     if r is None:
+        if (text or "").strip():
+            await _set_problem("voice", explain_tts_failure(tts.last_failure, voice_id))
         return None
+    await _set_problem("voice", "")
     _session_tokens["tts_calls"] += 1
     _append_usage_entry(0, 0, "tts")
     log.debug(f"tts: {len(text)} chars, first byte {r.first_byte_sec:.2f}s, total {r.total_sec:.2f}s")
@@ -718,6 +772,17 @@ def _action_words(text: str) -> list[str]:
 
 
 async def _on_brain_state(state: str, info: dict) -> None:
+    if state == "failed":
+        if info.get("failure_reason") == "auth":
+            await _set_problem("brain", _AUTH_BRAIN_DOWN_LINE)
+        else:
+            await _set_problem(
+                "brain",
+                "My brain (Claude Code) isn't running: "
+                f"{str(info.get('reason') or 'no reason given')[:200]}. Is Claude Code "
+                "installed and logged in? Run `claude` in a terminal to check.")
+    elif state == "ready":
+        await _set_problem("brain", "")
     if state == "failed" and info.get("failure_reason") == "auth":
         # At ERROR level, visible in the terminal the user is already
         # looking at, regardless of whether speech itself is available.
@@ -6612,6 +6677,8 @@ async def voice_handler(ws: WebSocket):
         # while they are in flight.
         _enqueue(queue, {"type": "config", "muteMicDuringSpeech": MUTE_MIC_DURING_SPEECH})
         _enqueue(queue, {"type": "status", "state": "idle"})
+        for _source, _text in list(_problems.items()):
+            _enqueue(queue, {"type": "problem", "source": _source, "text": _text})
 
         global _last_greeting_time
         if speech is not None and time.time() - _last_greeting_time > 60:
@@ -6900,6 +6967,7 @@ async def api_settings_status():
     claude_installed = _shutil.which("claude") is not None
     return {
         "claude_code_installed": claude_installed,
+        "problems": dict(_problems),
         "server_port": 8340,
         "uptime_seconds": int(time.time() - _session_start),
         "env_keys_set": {
@@ -6973,13 +7041,17 @@ from starlette.responses import FileResponse
 FRONTEND_DIST = Path(__file__).parent / "frontend" / "dist"
 
 if FRONTEND_DIST.exists():
+    # no-store: the page names its scripts by content hash, so a stale copy of
+    # the page itself is what keeps an old build on screen after an upgrade.
+    _NO_STORE = {"Cache-Control": "no-store"}
+
     @app.get("/")
     async def serve_index():
-        return FileResponse(str(FRONTEND_DIST / "index.html"))
+        return FileResponse(str(FRONTEND_DIST / "index.html"), headers=_NO_STORE)
 
     @app.get("/dashboard")
     async def serve_dashboard():
-        return FileResponse(str(FRONTEND_DIST / "dashboard.html"))
+        return FileResponse(str(FRONTEND_DIST / "dashboard.html"), headers=_NO_STORE)
 
     app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
 
