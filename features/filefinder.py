@@ -46,7 +46,10 @@ def check_new_root(raw: str):
     home = Path(os.environ.get("USERPROFILE") or Path.home()).resolve()
     if rp == home or rp in home.parents:
         return None, "That's your whole user folder — pick a folder inside it"
-    if any(part.lower() in FORBIDDEN_PARTS for part in rp.parts):
+    # Inside the profile only the parts below it count (the profile itself may sit under a
+    # folder with a forbidden name, e.g. a temp directory); elsewhere every part counts.
+    below = rp.relative_to(home).parts if home in rp.parents else rp.parts
+    if any(part.lower() in FORBIDDEN_PARTS for part in below):
         return None, "I won't search system or credential folders"
     return rp, None
 
