@@ -79,3 +79,39 @@ copy .env.example .env      # add FISH_API_KEY
 $env:PYTHONUTF8 = "1"
 python server.py
 ```
+
+## Everyday tools
+
+| Say | What happens |
+|---|---|
+| "Remind me at 3 to call Sam", "timer for 12 minutes", "remind me to drink water every hour" | `reminder`: spoken when due (a Windows toast if no page is open); repeating nudges are gentle and held back during focus |
+| "Add milk to the shopping list", "remember my passport is in the blue drawer" | `lists`: plain named lists |
+| "What's 18% of 2,340?", "convert 40 euros to dollars" | `calculate`: exact arithmetic, units, currencies |
+| "Summarise what I just copied", "put that on my clipboard" | `clipboard` |
+| "Find the PDF about taxes I downloaded last week" | `find_files`: names only, in Documents, Downloads, Desktop |
+| "I'm focusing for an hour" | `focus_mode`: holds back non-urgent speech and minimises your chosen distraction apps |
+| "Save a routine called good night: lights off, minimise everything" | `routine`: named chains using a short safe list of tools |
+| "Pause", "next track", "volume up" | `media_control`: media keys, works with any player |
+| "Tell me when my Claude usage is high" | `alerts` |
+| "What did I get done today?", "when will I hit my limit?" | `daily_summary` |
+| "Start keeping my life log", "what was I working on Tuesday?" | `life_log`: off until you say so; local only; kept 30 days |
+| "Switch to the black hole theme", "sounds on", "night mode" | `hud_style` |
+
+## Adding your own tools (plugins)
+
+Drop a `.py` file into `%APPDATA%\JARVIS\plugins\` and restart JARVIS. It
+registers a tool with `toolkit`:
+
+```python
+import toolkit
+
+toolkit.register(toolkit.Tool(
+    name="coffee", description="Start the coffee machine.",
+    schema={"type": "object", "properties": {}},
+    handler=lambda args: "Brewing, sir.",
+    acting=True, exempt="it brews, it reads nothing"))
+```
+
+A plugin runs with JARVIS's own rights, so only put there code you trust. A
+plugin cannot replace a built-in tool, and one that fails to load is skipped
+and logged.

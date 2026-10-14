@@ -210,7 +210,11 @@ def test_the_reader_set_is_every_acting_tool_that_only_reads(wired):
     server = wired
     assert server.UNTRUSTED_READING_TOOLS == {
         "read_page", "look_at_page", "github_repo",
-        "look_at_screen", "what_is_on_screen", "browse"}
+        "look_at_screen", "what_is_on_screen", "browse",
+        # toolkit features that read the user's own machine and are used in
+        # the same breath as what they find: find a file then open it, read
+        # the clipboard then write it back, search the log.
+        "clipboard", "find_files", "life_log"}
     assert "manage_window" not in server.UNTRUSTED_READING_TOOLS
     assert server.UNTRUSTED_READING_TOOLS <= server.ACTING_TOOLS, \
         "a name in here that is not an acting tool gates nothing and is a typo"

@@ -809,6 +809,15 @@ TOOL_SPECS = [
 ]
 
 
+# Tools from `toolkit` (the built-in features and the user's plugins). The
+# server loads the same ones, so the two lists always agree.
+import toolkit  # noqa: E402
+
+toolkit.load_features()
+toolkit.load_plugins()
+TOOL_SPECS.extend(toolkit.specs())
+
+
 _LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
 
 

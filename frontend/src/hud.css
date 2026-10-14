@@ -197,3 +197,8 @@
   #hud-panel, #hud-orb { transition: none; }
   .hud-dot.bad { animation: none; }
 }
+
+/* night mode: dimmer and calmer */
+#hud.dim #hud-orb { opacity: 0.5; filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.15)) saturate(0.7); }
+#hud.dim #hud-panel { opacity: 0; }
+#hud.dim.open #hud-panel { opacity: 0.85; }

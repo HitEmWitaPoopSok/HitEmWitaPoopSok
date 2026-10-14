@@ -247,6 +247,7 @@ socket.onMessage((msg) => {
     audioPlayer.dropQueued();
   } else if (type === "status") {
     const state = msg.state as string;
+    hud.cue(state === "idle" ? (isMuted ? "done" : "listening") : state === "thinking" ? "thinking" : "");
     if (state === "thinking") transition("thinking");
     else if (state === "speaking") transition("speaking");
     else if (state === "compacting") transition("compacting");
@@ -257,7 +258,12 @@ socket.onMessage((msg) => {
     statusEl.textContent = String(msg.text);
   } else if (type === "hud") {
     const action = String(msg.action ?? "open");
-    if (action === "close") hud.close();
+    if (action === "style") hud.setStyle({
+      theme: msg.theme ? String(msg.theme) : undefined,
+      sounds: typeof msg.sounds === "boolean" ? msg.sounds : undefined,
+      dim: typeof msg.dim === "boolean" ? msg.dim : undefined,
+    });
+    else if (action === "close") hud.close();
     else if (action === "toggle") hud.toggle();
     else hud.open(msg.focus ? String(msg.focus) : undefined);
   } else if (type === "activity") {

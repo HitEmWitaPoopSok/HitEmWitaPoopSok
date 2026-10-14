@@ -31,6 +31,8 @@ export interface Hud {
   toggle(): void;
   noteActivity(tool: string, state: string): void;
   refresh(): void;
+  setStyle(s: { theme?: string; sounds?: boolean; dim?: boolean }): void;
+  cue(kind: string): void;
 }
 
 type Light = "ok" | "warn" | "bad" | "off";
@@ -171,6 +173,49 @@ export function createHud(hooks: HudHooks): Hud {
 
   // ── the reactor ──────────────────────────────────────────────────────
   const start = performance.now();
+  let theme = "reactor";
+  let sounds = false;
+  let audio: AudioContext | null = null;
+  try {
+    theme = localStorage.getItem("jarvis-hud-theme") || "reactor";
+    sounds = localStorage.getItem("jarvis-hud-sounds") === "1";
+    if (localStorage.getItem("jarvis-hud-dim") === "1") root.classList.add("dim");
+  } catch { /* storage may be blocked */ }
+
+  /** A short tone for a state change: listening, working, done. */
+  function cue(kind: string) {
+    if (!sounds) return;
+    try {
+      audio = audio ?? new AudioContext();
+      const seq: Record<string, number[]> = { listening: [660, 880], thinking: [440], done: [880, 660], error: [220, 180] };
+      const notes = seq[kind];
+      if (!notes) return;
+      notes.forEach((f, i) => {
+        const o = audio!.createOscillator();
+        const gn = audio!.createGain();
+        o.frequency.value = f;
+        o.type = "sine";
+        const t0 = audio!.currentTime + i * 0.09;
+        gn.gain.setValueAtTime(0.0001, t0);
+        gn.gain.exponentialRampToValueAtTime(0.05, t0 + 0.02);
+        gn.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+        o.connect(gn).connect(audio!.destination);
+        o.start(t0);
+        o.stop(t0 + 0.18);
+      });
+    } catch { /* no audio available */ }
+  }
+
+  function setStyle(s: { theme?: string; sounds?: boolean; dim?: boolean }) {
+    try {
+      if (s.theme) { theme = s.theme; localStorage.setItem("jarvis-hud-theme", theme); }
+      if (s.sounds !== undefined) { sounds = s.sounds; localStorage.setItem("jarvis-hud-sounds", sounds ? "1" : "0"); if (sounds) cue("done"); }
+      if (s.dim !== undefined) { root.classList.toggle("dim", s.dim); localStorage.setItem("jarvis-hud-dim", s.dim ? "1" : "0"); }
+    } catch { /* storage may be blocked */ }
+    if (s.theme) theme = s.theme;
+    if (s.dim !== undefined) root.classList.toggle("dim", s.dim);
+  }
+
   function draw(now: number) {
     requestAnimationFrame(draw);
     if (document.hidden) return;
@@ -223,6 +268,59 @@ export function createHud(hooks: HudHooks): Hud {
       : "rgba(56,189,248,0.22)";
     ctx.stroke();
 
+    if (theme === "blackhole") {
+      // accretion disc around a dark core
+      ctx.save();
+      ctx.translate(c, c);
+      for (let i = 0; i < 4; i++) {
+        ctx.save();
+        ctx.rotate(t * (0.35 + i * 0.12) * m + i);
+        ctx.scale(1, 0.34);
+        const r = 17 + i * 5;
+        const gr = ctx.createRadialGradient(0, 0, r - 4, 0, 0, r + 3);
+        gr.addColorStop(0, "rgba(251,146,60,0)");
+        gr.addColorStop(0.5, `rgba(${251 - i * 40},${146 + i * 30},${60 + i * 50},${0.75 - i * 0.12})`);
+        gr.addColorStop(1, "rgba(251,146,60,0)");
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.strokeStyle = gr;
+        ctx.lineWidth = 5;
+        ctx.stroke();
+        ctx.restore();
+      }
+      const bk = 1 + pulse * 0.5 * Math.sin(t * pulseRate * m);
+      ctx.beginPath();
+      ctx.arc(0, 0, 11 * bk, 0, Math.PI * 2);
+      ctx.fillStyle = "#000";
+      ctx.shadowColor = "rgba(125,211,252,0.9)";
+      ctx.shadowBlur = 10;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    } else if (theme === "moon") {
+      // a pale cratered moon with a slow terminator
+      const mk = 1 + pulse * 0.4 * Math.sin(t * pulseRate * m);
+      ctx.save();
+      ctx.translate(c, c);
+      const mg = ctx.createRadialGradient(-6, -6, 2, 0, 0, 20 * mk);
+      mg.addColorStop(0, "#f1f5f9");
+      mg.addColorStop(0.7, "#94a3b8");
+      mg.addColorStop(1, "#334155");
+      ctx.beginPath();
+      ctx.arc(0, 0, 18 * mk, 0, Math.PI * 2);
+      ctx.fillStyle = mg;
+      ctx.shadowColor = "rgba(125,211,252,0.7)";
+      ctx.shadowBlur = 12;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "rgba(51,65,85,0.45)";
+      for (const [x, y, r] of [[-6, -3, 3.2], [5, 4, 2.4], [2, -8, 2], [-3, 8, 1.8]] as const) {
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    } else {
     // coil: ten segments
     ctx.save();
     ctx.translate(c, c);
@@ -267,6 +365,7 @@ export function createHud(hooks: HudHooks): Hud {
     ctx.lineWidth = 1.2;
     ctx.stroke();
     ctx.restore();
+    }
 
     // moons: one per active run (cyan running, amber queued), red for needs-you
     function moon(index: number, count: number, rx: number, ry: number, tilt: number, speed: number, size: number, color: string, glow: number) {
@@ -609,5 +708,7 @@ export function createHud(hooks: HudHooks): Hud {
       if (isOpen) render();
     },
     refresh() { void pollNow(); },
+    setStyle,
+    cue,
   };
 }

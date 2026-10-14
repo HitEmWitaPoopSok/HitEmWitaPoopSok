@@ -1896,6 +1896,7 @@ async def lifespan(application: FastAPI):
 
     await start_brain_and_speech()
     await start_session_watcher()
+    toolkit.start_jobs()
     # Deliberately not awaited: every check is time-boxed to 5s, so running
     # them inline could hold the server closed for that long before the UI can
     # connect -- and the mic is the first thing the user reaches for. The task
@@ -1906,6 +1907,7 @@ async def lifespan(application: FastAPI):
 
     yield
 
+    await toolkit.stop_jobs()
     await stop_session_watcher()
     await stop_brain_and_speech()
     try:
@@ -7479,6 +7481,53 @@ if FRONTEND_DIST.exists():
 # client except not being on the LAN. `--host 0.0.0.0` still works, for
 # anyone who means it.
 DEFAULT_BIND_HOST = web_auth.JARVIS_DEFAULT_HOST
+
+
+
+# ---------------------------------------------------------------------------
+# The toolkit: features and plugins register themselves; install them here,
+# after every built-in tool exists, so none can replace one.
+# ---------------------------------------------------------------------------
+
+import toolkit                                            # noqa: E402
+
+_TOOLKIT_WRAP_NAME = "tool output"
+
+
+class _NoPage(toolkit.NoListener):
+    pass
+
+
+async def _toolkit_speak(text: str, urgent: bool) -> None:
+    if speech is None or not voice_clients:
+        raise _NoPage()
+    await speech.say(text, Priority.URGENT if urgent else Priority.NORMAL)
+
+
+async def _toolkit_notify(title: str, text: str) -> bool:
+    return bool(await notifier.notify(title, text))
+
+
+def _toolkit_projects() -> list:
+    try:
+        return sorted({p for _n, p in _project_roots()})
+    except Exception:
+        return []
+
+
+toolkit.Hooks.speak = _toolkit_speak
+toolkit.Hooks.emit = _voice_emit
+toolkit.Hooks.notify = _toolkit_notify
+toolkit.Hooks.project_paths = _toolkit_projects
+toolkit.load_features()
+toolkit.load_plugins()
+toolkit.install(TOOL_HANDLERS, ACTING_TOOLS, TAINTING_TOOLS, TAINT_EXEMPT_TOOLS,
+                UNTRUSTED_READING_TOOLS,
+                lambda text: _wrap_untrusted(_TOOLKIT_WRAP_NAME, text),
+                builtin=set(TOOL_HANDLERS))
+import brain as _brain_module                              # noqa: E402
+_brain_module.ALLOWED_TOOLS.extend(
+    n for n in toolkit.allowed_names() if n not in _brain_module.ALLOWED_TOOLS)
 
 
 if __name__ == "__main__":

@@ -269,6 +269,7 @@ SAMPLES = {
     "_HEADING": "# Title",
     "_TASK_HEADING": "## Task 1: wire the executor",
     "_CHECKBOX": "- [x] done",
+    "NAME_RE": "my_tool",
 }
 
 ALPHABET = ("abcdefghijklmnopqrstuvwxyz0123456789"

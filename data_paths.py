@@ -125,6 +125,7 @@ KNOWN_TEMPLATE_HASHES = frozenset({
     "dfec0e28f7fc734987a1bcffd4feda103bde961f4a4721ce7957a7dccae96487",  # send it, do not ask twice
     "642dd185020dcbe6668d93f2ee8a4b5aee0e8ab3b5c94d16ccacb6ecb5c3e7ad",  # windows, browser and smart home
     "f5477b5c31c6cd1b96bd15a120846a39e2a4603983ec3327944351028f3a311f",  # daily brief
+    "b74a7239985630266cae9d36914a1fb1a0360381afc5225f889d6d2430547ef2",  # everyday tools
     "092df6a5e43bc5ed0a31e9f79b1f77cc4849754d1f4ab4807bded122ab97ad5f",  # say "start fresh" when a memory is refused
 })
 

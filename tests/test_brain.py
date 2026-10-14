@@ -50,7 +50,8 @@ def test_command_has_exact_flags(tmp_path):
     assert "--strict-mcp-config" in cmd
     assert "--dangerously-skip-permissions" in cmd
     assert '"crossSessionInbound": "accept"' in cmd[cmd.index("--settings") + 1].replace('":"', '": "')
-    assert cmd[cmd.index("--tools") + 1] == (                     # an allowlist, not a denylist
+    import toolkit
+    pinned_tools = (                                              # an allowlist, not a denylist
         "mcp__jarvis__list_sessions,mcp__jarvis__session_detail,"
         "mcp__jarvis__steer_session,mcp__jarvis__answer_dialog,"
         "mcp__jarvis__spawn_run,"
@@ -78,7 +79,12 @@ def test_command_has_exact_flags(tmp_path):
         # The CLI's own two, and the only built-ins here: without them JARVIS
         # can read a page he was given the address of and find nothing.
         "WebSearch,WebFetch")
-    assert cmd[cmd.index("--tools") + 1] == ",".join(brain.ALLOWED_TOOLS), (
+    granted = cmd[cmd.index("--tools") + 1]
+    # Tools added through `toolkit` (features, plugins) follow the pinned ones.
+    assert granted.startswith(pinned_tools)
+    extra = [n for n in granted[len(pinned_tools):].split(",") if n]
+    assert set(extra) <= set(toolkit.allowed_names()), extra
+    assert granted == ",".join(brain.ALLOWED_TOOLS), (
         "the pin above IS ALLOWED_TOOLS — a name that appears in one and not "
         "the other means the list this test guards is no longer the list the "
         "brain is launched with")

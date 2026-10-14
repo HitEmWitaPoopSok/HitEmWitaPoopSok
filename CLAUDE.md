@@ -139,6 +139,11 @@ arbitrary LLM and file content, so everything goes through
 - `home_assistant.py` — `smart_home`: lights and devices through Home
   Assistant's REST API (`HOMEASSISTANT_URL` / `HOMEASSISTANT_TOKEN`). Never
   operates locks, alarms, cameras, garage doors or scripts
+- `toolkit.py` + `features/` — How new abilities are added: a feature builds a
+  `toolkit.Tool` (it must say whether it taints the turn or why it is exempt)
+  and registers it; `server.py` installs them at the end of its module, and
+  `jarvis_mcp` / `brain` pick them up. Background work is a `toolkit.Job`.
+  User plugins load from `<data>/plugins/`
 - `brief.py` — The daily brief: a user-edited topic list in `<data>/brief.json`,
   given once per local day on first open by a system-origin brain turn
   (`server._give_brief`); edited by voice via `brief_settings`
