@@ -343,6 +343,7 @@ invariants hold throughout it:
 | `window_manager.py` | Windows: list, open, focus, minimise, maximise, close |
 | `browser_agent.py` | A browser JARVIS drives himself (click, type, scroll) |
 | `home_assistant.py` | Lights and smart devices through Home Assistant |
+| `brief.py` | The daily brief: topics the user sets by voice, given on first open each day |
 | `dialog.py` | The closed key vocabulary for `answer_dialog` (nothing is pressed on Windows) |
 | `jarvis_memory.py` | Memory as a folder of Markdown files, not a database |
 | `jarvis_home/CLAUDE.md` | JARVIS's persona and rules — the file to edit to change who he is |

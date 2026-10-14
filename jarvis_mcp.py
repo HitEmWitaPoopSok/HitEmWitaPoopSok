@@ -514,6 +514,32 @@ TOOL_SPECS = [
             "required": ["action"]},
     },
     {
+        "name": "daily_brief",
+        "description": (
+            "The facts you already hold for the user's daily brief: the "
+            "weather, what their runs did in the last day, and their usage. "
+            "Call it when giving the brief (you are told when) or when they "
+            "ask for their brief or 'what's the news today'. Anything else on "
+            "their list you look up with a web search."),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "brief_settings",
+        "description": (
+            "Show or change what the user's daily brief covers. It is given "
+            "once, the first time they open you each day. Use it whenever "
+            "they say what they want updates on or ask to change it: 'add "
+            "football scores to my brief', 'drop the weather', 'what's in my "
+            "brief', 'turn the brief off'. `items` are short topics in their "
+            "own words."),
+        "inputSchema": {"type": "object", "properties": {
+            "action": {"type": "string", "enum": [
+                "show", "add", "remove", "replace", "clear", "enable",
+                "disable", "reset"]},
+            "items": {"type": "array", "items": {"type": "string"}}},
+            "required": ["action"]},
+    },
+    {
         "name": "usage_status",
         "description": (
             "How much of the user's Claude subscription is used: the five-hour "

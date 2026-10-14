@@ -384,6 +384,9 @@ PRINTERS = _functions_that_print_a_foreign_field()
 # to-do: every one of them is a place where a session's own words DO reach a
 # string, and the argument is why that string is safe.
 EXEMPT = {
+    "server.tool_daily_brief": (
+        "it prints run summaries, which a run's model wrote; the whole block "
+        "is returned inside one untrusted wrapper (`_BRIEF_WRAP_NAME`)"),
     "browser_agent.describe": (
         "it prints a web page's own text, and its only consumer is "
         "`tool_browse`, which puts the whole result inside one untrusted "

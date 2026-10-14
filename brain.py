@@ -69,6 +69,8 @@ ALLOWED_TOOLS = [
     "mcp__jarvis__manage_window",
     "mcp__jarvis__browse",
     "mcp__jarvis__smart_home",
+    "mcp__jarvis__daily_brief",
+    "mcp__jarvis__brief_settings",
     "mcp__jarvis__connections",
     "mcp__jarvis__enable_session_inbox",
     "mcp__jarvis__repo_overview",

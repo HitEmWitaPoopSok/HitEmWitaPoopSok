@@ -68,6 +68,7 @@ def test_command_has_exact_flags(tmp_path):
         "mcp__jarvis__show_hud,mcp__jarvis__fix_yourself,"
         "mcp__jarvis__manage_window,mcp__jarvis__browse,"
         "mcp__jarvis__smart_home,"
+        "mcp__jarvis__daily_brief,mcp__jarvis__brief_settings,"
         "mcp__jarvis__connections,"
         "mcp__jarvis__enable_session_inbox,"
         "mcp__jarvis__repo_overview,mcp__jarvis__search_repo,"

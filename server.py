@@ -6427,6 +6427,83 @@ TAINTING_TOOLS.update({
 UNTRUSTED_READING_TOOLS.add("browse")
 
 
+# --- the daily brief ------------------------------------------------------
+
+import brief                                              # noqa: E402
+
+_BRIEF_WRAP_NAME = "brief facts"
+
+
+async def tool_daily_brief(args: dict) -> str:
+    """The facts JARVIS already holds for the brief: weather, runs, usage."""
+    lines = [f"Now: {datetime.now().strftime('%A %d %B %H:%M')}."]
+    try:
+        weather = await asyncio.wait_for(
+            asyncio.to_thread(_fetch_weather_string_sync), 6.0)
+    except Exception:
+        weather = None
+    lines.append(weather or "Weather: unavailable.")
+    try:
+        since = time.time() - 86400
+        runs = [r for r in run_store.list_runs(limit=40) if r["created_at"] >= since]
+    except Exception:
+        runs = []
+    if runs:
+        counts: dict[str, int] = {}
+        for r in runs:
+            counts[r["status"]] = counts.get(r["status"], 0) + 1
+        lines.append("Runs in the last day: "
+                     + ", ".join(f"{n} {s}" for s, n in sorted(counts.items())) + ".")
+        for r in runs[:6]:
+            lines.append(f"- {r['project_name']}: {r['status']}"
+                         f"{' — ' + r['summary'][:120] if r.get('summary') else ''}")
+    else:
+        lines.append("Runs in the last day: none.")
+    lines.append(tool_usage_status({}))
+    return _wrap_untrusted(_BRIEF_WRAP_NAME, "\n".join(lines))
+
+
+def tool_brief_settings(args: dict) -> str:
+    """Show or change what the daily brief covers."""
+    items = args.get("items")
+    if isinstance(items, str):
+        items = [items]
+    if not isinstance(items, list):
+        items = []
+    try:
+        said = brief.edit(str(args.get("action") or "show"), items)
+        return _safe_label(said, 600) + " Sir."
+    except ValueError as e:
+        return f"{e}, sir."
+
+
+async def _give_brief() -> None:
+    """The first-open-of-the-day brief, as one system-origin brain turn."""
+    if brain_instance is None or speech is None or not brain_instance.ready:
+        return
+    brief.mark_given()
+    utt = speech.begin_turn()
+    try:
+        try:
+            hold = _OneLinePerTurn(lambda d: speech.feed(utt, d))
+            await brain_instance.turn(brief.build_prompt(), origin="system",
+                                      on_delta=hold.delta, on_tool=hold.tool_started)
+            hold.finish()
+        finally:
+            await speech.end_turn(utt)
+    except Exception as e:
+        log.warning("daily brief failed: %s", e)
+
+
+TOOL_HANDLERS.update({"daily_brief": tool_daily_brief,
+                      "brief_settings": tool_brief_settings})
+ACTING_TOOLS.add("brief_settings")
+TAINTING_TOOLS["daily_brief"] = "your recent runs"
+TAINT_EXEMPT_TOOLS["brief_settings"] = (
+    "it edits the user's own topic list, which is bounded, stripped of markup "
+    "and only ever quoted back to a system turn as topics; it reads nothing")
+
+
 # --- "what are you connected to?" ----------------------------------------
 #
 # The answer comes from what ACTUALLY started, never from a list written down
@@ -6912,6 +6989,9 @@ async def voice_handler(ws: WebSocket):
         if speech is not None and time.time() - _last_greeting_time > 60:
             _last_greeting_time = time.time()
             await speech.say(_greeting(), Priority.NORMAL)
+            if brief.due():
+                _background.add(task := asyncio.create_task(_give_brief()))
+                task.add_done_callback(_background.discard)
 
         while True:
             raw = await ws.receive_text()

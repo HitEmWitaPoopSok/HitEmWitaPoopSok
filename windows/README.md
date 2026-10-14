@@ -34,6 +34,7 @@ Your data (database, memory notes, `.env`, `jarvis.log`) lives in
 
 | Say | What happens |
 |---|---|
+| "Add football scores to my brief", "drop the weather", "what's in my brief?", "turn the brief off" | The daily brief: the first time you open JARVIS each day he reads out the topics you chose (weather, what your runs did, usage, and anything else he can look up). Change it any time by asking. Stored in `%APPDATA%\\JARVIS\\brief.json` |
 | "Open the HUD" / "show systems" | The small reactor orb in the lower-left corner expands (or click it) |
 | "Fix yourself" (or the button in settings / HUD) | A repair runs on a *copy* of JARVIS's code. You read the change on the HUD and press **Apply**; it keeps a backup and has **Undo**. Python code only |
 | "Open Notepad", "minimise Chrome", "close the terminal", "show the desktop" | Window control. Add your own apps in `%APPDATA%\JARVIS\apps.json`, e.g. `{"spotify": "C:\\Users\\you\\AppData\\Roaming\\Spotify\\Spotify.exe"}` |

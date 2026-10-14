@@ -139,6 +139,9 @@ arbitrary LLM and file content, so everything goes through
 - `home_assistant.py` — `smart_home`: lights and devices through Home
   Assistant's REST API (`HOMEASSISTANT_URL` / `HOMEASSISTANT_TOKEN`). Never
   operates locks, alarms, cameras, garage doors or scripts
+- `brief.py` — The daily brief: a user-edited topic list in `<data>/brief.json`,
+  given once per local day on first open by a system-origin brain turn
+  (`server._give_brief`); edited by voice via `brief_settings`
 - `frontend/src/hud.ts` — The HUD: a reactor-and-moons orb that expands into a
   status panel and the Fix Yourself review
 - `repo_read.py` — Cheap, model-free reading of a repository (no `claude`
