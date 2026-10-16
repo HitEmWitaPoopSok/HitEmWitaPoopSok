@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a73e8">
+<title>Shop Quoter</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<main>
+  <section class="screen" id="screen-week" hidden>
+    <h1>This Week</h1>
+    <div class="dashbox"></div>
+    <div id="weekList"></div>
+  </section>
+
+  <section class="screen" id="screen-jobs" hidden>
+    <h1>Jobs</h1>
+    <button class="btn primary big" data-act="newJob">+ New job</button>
+    <div id="jobsSummary"></div>
+    <div id="jobsList"></div>
+  </section>
+
+  <section class="screen" id="screen-quote" hidden>
+    <h1>Quote</h1>
+    <div class="legend" data-legend></div>
+    <div id="quoteForm"></div>
+    <div id="quoteOut"></div>
+  </section>
+
+  <section class="screen" id="screen-products" hidden>
+    <h1>Product Price List</h1>
+    <button class="btn primary big" data-act="newProd">+ New product</button>
+    <div id="prodList"></div>
+  </section>
+
+  <section class="screen" id="screen-settings" hidden>
+    <h1>Settings</h1>
+    <div class="dashbox"></div>
+    <div class="legend" data-legend></div>
+    <div id="settingsForm"></div>
+  </section>
+</main>
+
+<div id="sheet" class="sheet" hidden></div>
+<div id="toast" class="toast" hidden></div>
+<input type="file" id="importFile" accept="application/json,.json" hidden>
+
+<nav class="tabs">
+  <button data-tab="week"><span>📅</span>Week</button>
+  <button data-tab="jobs"><span>📋</span>Jobs</button>
+  <button data-tab="quote"><span>💲</span>Quote</button>
+  <button data-tab="products"><span>📦</span>Products</button>
+  <button data-tab="settings"><span>⚙️</span>Settings</button>
+</nav>
+
+<script src="app.js"></script>
+</body>
+</html>
